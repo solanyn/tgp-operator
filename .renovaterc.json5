@@ -1,0 +1,55 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommitTypeAll(chore)",
+    ":automergeDigest",
+    ":automergeMinor"
+  ],
+  "platformAutomerge": true,
+  "timezone": "UTC",
+  "schedule": ["before 6am on monday"],
+  "labels": ["dependencies"],
+  "separateMinorPatch": true,
+  "separateMajorMinor": true,
+  "prHourlyLimit": 2,
+  "prConcurrentLimit": 5,
+  "golang": {
+    "commitMessageTopic": "Go module {{depName}}"
+  },
+  "packageRules": [
+    {
+      "matchDatasources": ["go"],
+      "rangeStrategy": "bump"
+    },
+    {
+      "matchDepNames": ["go"],
+      "rangeStrategy": "replace"
+    },
+    {
+      "matchPackagePatterns": ["^k8s.io"],
+      "groupName": "kubernetes packages",
+      "automerge": false
+    },
+    {
+      "matchPackagePatterns": ["^sigs.k8s.io"],
+      "groupName": "kubernetes sig packages",
+      "automerge": false
+    },
+    {
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchCurrentVersion": "!/^0/",
+      "automerge": true
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "matchManagers": ["nix"],
+      "automerge": false,
+      "labels": ["nix-update"]
+    }
+  ]
+}
