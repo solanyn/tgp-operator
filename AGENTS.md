@@ -66,44 +66,15 @@ Use British English spelling and grammar except in code. Code should use America
 
 Built for ML engineers with budget homelabs who need occasional GPU access without the cost of dedicated hardware. Enables cost-effective GPU provisioning across multiple cloud providers for intermittent workloads.
 
-## Task Commands
+## Quick Reference
 
-### Development
-- `task setup` - Complete development environment setup (git hooks + test env)
-- `task dev:build` - Build manager binary
-- `task dev:generate` - Generate Go code (deepcopy methods)
-- `task dev:clean` - Clean build artifacts
-
-### Testing
-- `task test:unit` - Run unit tests
-- `task test:integration` - Run all integration tests (envtest + Talos Docker)
-- `task test:e2e` - Run true e2e tests against real cloud providers
-- `task test:all` - Run all safe tests (unit + integration)
-
-### Linting & Formatting
-- `task lint:all` - Run all linting checks
+### Key Tasks
+- `task setup` - Initialize development environment
+- `task ci` - Run full CI workflow (build, test, lint)
 - `task lint:fix-all` - Auto-fix all formatting issues
-- `task lint:go` - Go-specific linting and formatting
-- `task lint:yaml` - YAML linting and formatting
-- `task lint:markdown` - Markdown linting
+- `task release:preview-changelog` - Preview next release
 
-### Container & Deployment
-- `task docker:build` - Build rootless container image
-- `task docker:push` - Push container to registry
-- `task docker:push-release` - Push with semantic version tags
-- `task chart:template` - Generate Helm templates
-- `task chart:validate` - Validate Helm chart and manifests
-- `task chart:push-oci` - Push chart as OCI artifact to GHCR
-
-### Release
-- `task release:next-version` - Show next semantic version
-- `task release:preview-changelog` - Preview changelog for next release
-- `task release:release` - Create full automated release
-- `task release:auto-release` - Trigger GitHub Actions release workflow
-
-### Workflows
-- `task ci` - Full CI workflow (deps, build, test, lint)
-- `task deploy` - Build container and generate chart
+**See [DEVELOPMENT.md](DEVELOPMENT.md) for complete task reference and workflows.**
 
 ## Testing Strategy
 
@@ -111,49 +82,4 @@ Built for ML engineers with budget homelabs who need occasional GPU access witho
 - **Integration tests** - Test controller logic (envtest) + operator workflow (Docker Talos + mocked providers)
 - **E2E tests** - Test against real cloud providers (cost involved, requires credentials)
 
-## Installation
-
-### Via Helm Chart (Recommended)
-```bash
-helm install tgp-operator oci://ghcr.io/solanyn/charts/tgp-operator \
-  --version 0.1.0 \
-  --namespace tgp-system \
-  --create-namespace
-```
-
-### Via Generated Manifests
-```bash
-task chart:template
-kubectl apply -f dist/chart/tgp-operator/templates/
-```
-
-### Configure Provider Secrets
-```bash
-kubectl create secret generic tgp-provider-secrets \
-  --from-literal=VAST_API_KEY=your-key \
-  --from-literal=RUNPOD_API_KEY=your-key \
-  --from-literal=LAMBDA_LABS_API_KEY=your-key \
-  --from-literal=PAPERSPACE_API_KEY=your-key \
-  -n tgp-system
-```
-
-## Development Setup
-
-### Prerequisites
-- [Nix](https://nixos.org/download.html) with flakes enabled
-- [direnv](https://direnv.net/) (optional but recommended)
-
-### Environment Setup
-```bash
-git clone https://github.com/solanyn/tgp-operator
-cd tgp-operator
-
-# Option 1: With direnv (automatic)
-direnv allow
-
-# Option 2: Manual nix shell
-nix develop
-
-# Initialize development environment
-task setup
-```
+**See [DEVELOPMENT.md](DEVELOPMENT.md) for development setup and [README.md](README.md) for installation instructions.**
