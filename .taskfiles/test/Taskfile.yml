@@ -1,0 +1,104 @@
+version: '3'
+
+env:
+  KUBEBUILDER_ASSETS:
+    sh: setup-envtest use 1.28.0 -p path 2>/dev/null || echo ""
+  KIND_CLUSTER_NAME: tgp-operator-test
+
+tasks:
+  setup-envtest:
+    desc: Setup envtest environment
+    cmds:
+      - setup-envtest use 1.28.0
+    status:
+      - test -n "{{.KUBEBUILDER_ASSETS}}"
+
+  unit:
+    desc: Run unit tests
+    cmds:
+      - go test ./pkg/... -v
+
+  _integration-envtest:
+    desc: Run integration tests (envtest)
+    deps: [setup-envtest]
+    cmds:
+      - echo "Running envtest integration tests..."
+      - go test ./test/integration/... -v
+    env:
+      KUBEBUILDER_ASSETS: "{{.KUBEBUILDER_ASSETS}}"
+
+  setup-talos:
+    desc: Create Docker-based Talos cluster for e2e tests
+    preconditions:
+      - sh: command -v talosctl
+        msg: "talosctl not found. Install with: curl -sL https://talos.dev/install | sh"
+    cmds:
+      - echo "Creating Docker-based Talos cluster..."
+      - talosctl cluster create --name {{.KIND_CLUSTER_NAME}} --workers 2 --wait
+      - talosctl --nodes 10.5.0.2 kubeconfig --force
+      - echo "Talos cluster created and kubeconfig updated"
+    status:
+      - docker ps | grep -q talos
+
+  cleanup-talos:
+    desc: Destroy Docker-based Talos cluster
+    preconditions:
+      - sh: command -v talosctl
+        msg: "talosctl not found. Install with: curl -sL https://talos.dev/install | sh"
+    cmds:
+      - talosctl cluster destroy --name {{.KIND_CLUSTER_NAME}}
+      - echo "Talos cluster destroyed"
+
+  _integration-talos:
+    desc: Run integration tests (Talos Docker cluster with mocked providers)
+    deps: [setup-talos]
+    cmds:
+      - echo "Running Talos integration tests..."
+      - go test ./test/e2e/... -v -timeout 15m
+    env:
+      USE_EXISTING_CLUSTER: "true"
+
+  integration:
+    desc: Run all integration tests
+    cmds:
+      - task: _integration-envtest
+      - task: _integration-talos
+
+  all:
+    desc: Run all safe tests (excludes real e2e)
+    cmds:
+      - task: unit
+      - task: integration
+
+  e2e:
+    desc: Run true e2e tests against real cloud providers
+    cmds:
+      - echo "WARNING This will provision real GPU instances and incur costs"
+      - echo "Requires cloud provider credentials and will bill your account"
+      - echo "Set TGP_REAL_E2E=true to proceed"
+      - |
+        if [ "$TGP_REAL_E2E" = "true" ]; then
+          echo "Running e2e tests against real cloud providers..."
+          go test ./test/e2e/... -v -timeout 30m -tags=real
+        else
+          echo "Skipped - set TGP_REAL_E2E=true to run real e2e tests"
+          exit 1
+        fi
+
+
+  provision-talos-cloud:
+    desc: Provision a real cloud-based Talos cluster
+    cmds:
+      - echo "Provisioning cloud-based Talos cluster..."
+      - echo "This requires:"
+      - echo "  - Talos CLI (talosctl)"
+      - echo "  - Cloud provider credentials (AWS/GCP/Azure/etc)"
+      - echo "  - WireGuard configuration"
+      - echo ""
+      - echo "See https://www.talos.dev/latest/talos-guides/install/"
+      - echo "TODO Add cloud provisioning commands"
+
+  clean:
+    desc: Clean up test environments
+    cmds:
+      - task: cleanup-talos

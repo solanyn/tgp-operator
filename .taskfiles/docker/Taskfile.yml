@@ -1,0 +1,54 @@
+version: "3"
+
+vars:
+  IMAGE_REPO: ghcr.io/solanyn/tgp-operator
+  IMAGE_TAG: latest
+
+tasks:
+  build:
+    desc: Build container image
+    preconditions:
+      - sh: command -v docker
+        msg: "Docker not found. Install Docker Desktop or Docker Engine"
+    cmds:
+      - docker build -t {{.IMAGE_REPO}}:{{.IMAGE_TAG}} .
+      - docker tag {{.IMAGE_REPO}}:{{.IMAGE_TAG}} {{.IMAGE_REPO}}:latest
+
+  push:
+    desc: Push container image to registry
+    deps: [build]
+    cmds:
+      - docker push {{.IMAGE_REPO}}:{{.IMAGE_TAG}}
+      - docker push {{.IMAGE_REPO}}:latest
+
+  push-release:
+    desc: Push container image with semantic version tag
+    deps: [build]
+    vars:
+      VERSION:
+        sh: |
+          if command -v svu >/dev/null 2>&1; then
+            svu next --strip-prefix
+          else
+            echo "0.1.0"
+          fi
+    cmds:
+      - docker tag {{.IMAGE_REPO}}:{{.IMAGE_TAG}} {{.IMAGE_REPO}}:{{.VERSION}}
+      - docker tag {{.IMAGE_REPO}}:{{.IMAGE_TAG}} {{.IMAGE_REPO}}:v{{.VERSION}}
+      - docker push {{.IMAGE_REPO}}:{{.VERSION}}
+      - docker push {{.IMAGE_REPO}}:v{{.VERSION}}
+      - docker push {{.IMAGE_REPO}}:latest
+      - echo "Pushed {{.IMAGE_REPO}}:{{.VERSION}} and {{.IMAGE_REPO}}:v{{.VERSION}}"
+
+  test:
+    desc: Test container image
+    deps: [build]
+    cmds:
+      - docker run --rm {{.IMAGE_REPO}}:{{.IMAGE_TAG}} --help
+
+  scan:
+    desc: Scan container for vulnerabilities
+    deps: [build]
+    cmds:
+      - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock 
+        aquasec/trivy image {{.IMAGE_REPO}}:{{.IMAGE_TAG}}

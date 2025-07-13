@@ -1,0 +1,79 @@
+version: "3"
+
+tasks:
+  release:
+    desc: Create a full release (container + chart + GitHub release)
+    vars:
+      VERSION:
+        sh: svu next --strip-prefix
+    cmds:
+      - echo "Creating release {{.VERSION}}"
+      - task: validate
+      - task: tag
+      - task: changelog
+      - task: docker:push-release
+      - task: chart:push-oci
+      - task: github-release
+      - echo "Release {{.VERSION}} complete!"
+
+  validate:
+    desc: Run all validation before release
+    cmds:
+      - task: lint:all
+      - task: test:unit
+      - task: chart:validate
+
+  tag:
+    desc: Create and push git tag for current version
+    vars:
+      VERSION:
+        sh: svu next --strip-prefix
+    cmds:
+      - git tag {{.VERSION}}
+      - git push origin {{.VERSION}}
+      - echo "Tagged and pushed {{.VERSION}}"
+
+  changelog:
+    desc: Generate changelog for current release
+    vars:
+      VERSION:
+        sh: svu current --strip-prefix
+    cmds:
+      - git-chglog --output CHANGELOG.md
+      - echo "Generated CHANGELOG.md"
+
+  github-release:
+    desc: Create GitHub release with changelog
+    vars:
+      VERSION:
+        sh: svu current --strip-prefix
+      CHANGELOG:
+        sh: git-chglog --template .chglog/CHANGELOG.tpl.md {{.VERSION}}
+    preconditions:
+      - sh: command -v gh
+        msg: "GitHub CLI not found. Install with: brew install gh && gh auth login"
+    cmds:
+      - gh release create {{.VERSION}} --title "Release {{.VERSION}}" --notes "{{.CHANGELOG}}"
+
+  next-version:
+    desc: Show next semantic version
+    cmds:
+      - svu next --strip-prefix
+
+  preview-changelog:
+    desc: Preview changelog for next release
+    vars:
+      NEXT_VERSION:
+        sh: svu next --strip-prefix
+    cmds:
+      - echo "Changelog preview for {{.NEXT_VERSION}}:"
+      - git-chglog --next-tag {{.NEXT_VERSION}} --template .chglog/CHANGELOG.tpl.md {{.NEXT_VERSION}}
+
+  auto-release:
+    desc: Trigger GitHub Actions release workflow
+    preconditions:
+      - sh: command -v gh
+        msg: "GitHub CLI not found. Install with: brew install gh && gh auth login"
+    cmds:
+      - gh workflow run release.yml
+      - echo "Release workflow triggered! Check: gh run list -w release.yml"
