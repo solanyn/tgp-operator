@@ -1,0 +1,25 @@
+version: '3'
+
+tasks:
+
+  generate:
+    desc: Generate code (deepcopy methods, etc.)
+    cmds:
+      - controller-gen object paths="./pkg/api/..."
+
+  build:
+    desc: Build the manager binary
+    deps: [generate]
+    cmds:
+      - go build -o bin/manager ./cmd/manager
+
+  lint:
+    desc: Run linters
+    cmds:
+      - golangci-lint run ./...
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -rf bin/
+      - go clean -cache

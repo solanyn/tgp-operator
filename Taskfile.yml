@@ -1,0 +1,52 @@
+version: '3'
+
+includes:
+  dev: .taskfiles/dev/Taskfile.yml
+  test: .taskfiles/test/Taskfile.yml
+  docker: .taskfiles/docker/Taskfile.yml
+  chart: .taskfiles/chart/Taskfile.yml
+  release: .taskfiles/release/Taskfile.yml
+  lint: .taskfiles/lint/Taskfile.yml
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  deps:
+    desc: Download Go module dependencies
+    cmds:
+      - go mod download
+      - go mod tidy
+
+  setup:
+    desc: Setup development environment (run in nix develop shell)
+    cmds:
+      - task: deps
+      - task: test:setup-envtest
+      - task: _setup-git-hooks
+      - echo "Setup complete! You can now run 'task dev:build' or 'task test:all'"
+
+  _setup-git-hooks:
+    desc: Install git hooks for conventional commits
+    internal: true
+    cmds:
+      - git config core.hooksPath .githooks
+      - git config commit.template .gitmessage
+      - echo "Git hooks configured for conventional commits"
+
+  ci:
+    desc: Run CI workflow (build, test, lint)
+    cmds:
+      - task: deps
+      - task: dev:generate
+      - task: dev:build
+      - task: test:all
+      - task: lint:all
+
+  deploy:
+    desc: Build container and generate chart
+    cmds:
+      - task: docker:build
+      - task: chart:template

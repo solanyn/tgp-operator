@@ -1,0 +1,75 @@
+version: "3"
+
+tasks:
+  all:
+    desc: Run all linting and formatting checks
+    cmds:
+      - task: go
+      - task: yaml
+      - task: markdown
+      - task: shell
+      - task: nix
+      - task: github-actions
+
+  go:
+    desc: Lint and format Go code
+    cmds:
+      - golangci-lint run ./...
+      - gofumpt -l -d .
+
+  go-fix:
+    desc: Fix Go code formatting
+    cmds:
+      - gofumpt -l -w .
+      - go mod tidy
+
+  yaml:
+    desc: Lint and format YAML files
+    cmds:
+      - yamllint .
+      - yamlfmt -lint .
+
+  yaml-fix:
+    desc: Fix YAML formatting
+    cmds:
+      - yamlfmt .
+
+  markdown:
+    desc: Lint Markdown files
+    cmds:
+      - markdownlint-cli **/*.md
+
+  shell:
+    desc: Lint shell scripts
+    cmds:
+      - find . -name "*.sh" -exec shellcheck {} +
+      - find . -name "*.sh" -exec shfmt -d {} +
+
+  shell-fix:
+    desc: Fix shell script formatting
+    cmds:
+      - find . -name "*.sh" -exec shfmt -w {} +
+
+  nix:
+    desc: Format Nix files
+    cmds:
+      - nixpkgs-fmt --check .
+
+  nix-fix:
+    desc: Fix Nix formatting
+    cmds:
+      - nixpkgs-fmt .
+
+  github-actions:
+    desc: Lint GitHub Actions workflows
+    cmds:
+      - actionlint
+
+  fix-all:
+    desc: Auto-fix all formatting issues
+    cmds:
+      - task: go-fix
+      - task: yaml-fix
+      - task: shell-fix
+      - task: nix-fix
+      - echo "All formatting applied! Review changes before committing."
