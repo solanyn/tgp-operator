@@ -24,6 +24,7 @@ tasks:
     desc: Setup development environment (run in nix develop shell)
     cmds:
       - task: deps
+      - task: dev:generate
       - task: test:setup-envtest
       - task: _setup-git-hooks
       - echo "Setup complete! You can now run 'task dev:build' or 'task test:all'"

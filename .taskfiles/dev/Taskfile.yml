@@ -5,6 +5,7 @@ tasks:
   generate:
     desc: Generate code (deepcopy methods, etc.)
     cmds:
+      - go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
       - controller-gen object paths="./pkg/api/..."
 
   build:

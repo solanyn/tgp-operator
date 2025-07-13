@@ -9,6 +9,7 @@ tasks:
   setup-envtest:
     desc: Setup envtest environment
     cmds:
+      - go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
       - setup-envtest use 1.28.0
     status:
       - test -n "{{.KUBEBUILDER_ASSETS}}"
