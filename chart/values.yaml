@@ -1,0 +1,50 @@
+image:
+  repository: ghcr.io/solanyn/tgp-operator
+  tag: latest
+  pullPolicy: IfNotPresent
+
+controller:
+  replicas: 1
+  resources: {}
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+    readOnlyRootFilesystem: true
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+serviceAccount:
+  create: true
+  name: tgp-operator
+  annotations: {}
+
+rbac:
+  create: true
+
+providers:
+  vastai:
+    secretName: tgp-secret
+    secretKey: VAST_API_KEY
+  runpod:
+    secretName: tgp-secret
+    secretKey: RUNPOD_API_KEY
+  lambdaLabs:
+    secretName: tgp-secret
+    secretKey: LAMBDA_LABS_API_KEY
+  paperspace:
+    secretName: tgp-secret
+    secretKey: PAPERSPACE_API_KEY
+
+namespace: tgp-system
+
+metrics:
+  enabled: true
+  port: 8080
+
+health:
+  port: 8081
+
