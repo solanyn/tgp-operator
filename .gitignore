@@ -1,0 +1,62 @@
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+go.work.sum
+
+# Build artifacts
+bin/
+dist/
+schemas/
+
+# Test coverage
+*.cover
+coverage.out
+coverage.html
+
+# Dependencies
+vendor/
+
+# IDE/Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# Kubernetes test environment
+kubeconfig
+*.kubeconfig
+
+# Secrets and sensitive config
+*.key
+*.pem
+*.crt
+secrets/
+.env
+.env.local
+
+# Test artifacts
+testbin/
+cover.out
