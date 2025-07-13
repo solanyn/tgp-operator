@@ -1,8 +1,8 @@
-# TGP Operator
+# Talos GPU Provisioner
 
 Kubernetes operator for ephemeral GPU provisioning across multiple cloud providers.
 
-Addresses intermittent GPU compute needs by provisioning instances on-demand from cloud providers and automatically integrating them into existing Kubernetes clusters. Designed for workloads that require GPU resources occasionally rather than continuously.
+Addresses intermittent GPU compute needs by provisioning instances on-demand from cloud providers and automatically integrating them into existing Talos Kubernetes clusters. Designed for workloads that require GPU resources occasionally rather than continuously.
 
 ## Features
 
