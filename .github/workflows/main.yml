@@ -1,0 +1,63 @@
+name: Main Branch
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Need full history for semantic versioning
+    
+    - uses: DeterminateSystems/nix-installer-action@main
+    
+    - uses: DeterminateSystems/magic-nix-cache-action@main
+    
+    - name: Setup development environment
+      run: |
+        nix develop --command task setup
+    
+    - name: Run full CI suite
+      run: |
+        nix develop --command task ci
+    
+    - name: Check if release needed
+      id: check-release
+      run: |
+        NEXT_VERSION=$(nix develop --command svu next --strip-prefix)
+        CURRENT_VERSION=$(nix develop --command svu current --strip-prefix 2>/dev/null || echo "none")
+        echo "next-version=$NEXT_VERSION" >> $GITHUB_OUTPUT
+        echo "current-version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+        if [ "$NEXT_VERSION" != "$CURRENT_VERSION" ]; then
+          echo "needs-release=true" >> $GITHUB_OUTPUT
+        else
+          echo "needs-release=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Preview release
+      if: steps.check-release.outputs.needs-release == 'true'
+      run: |
+        echo "🚀 Release ${{ steps.check-release.outputs.next-version }} ready!"
+        echo "Run 'task release:release' locally to create the release"
+        nix develop --command task release:preview-changelog
+
+  container-build:
+    runs-on: ubuntu-latest
+    needs: test-and-build
+    steps:
+    - uses: actions/checkout@v4
+    
+    - uses: DeterminateSystems/nix-installer-action@main
+    
+    - uses: DeterminateSystems/magic-nix-cache-action@main
+    
+    - name: Build container
+      run: |
+        nix develop --command task docker:build
+    
+    - name: Test container
+      run: |
+        nix develop --command task docker:test
