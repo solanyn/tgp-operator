@@ -11,9 +11,10 @@ Use British English spelling and grammar except in code. Code should use America
 - **Edit First**: Always prefer editing existing files over creating new ones
 - **Task-based**: Use `task` for all development workflows
 - **Minimal Dependencies**: Favor well-maintained Go packages or implement our own. Keep dependencies minimal
-- **YAML Validation**: Use `yq` for YAML syntax validation and structure checks
-- **YAML Formatting**: Run `yamlfmt` after changing YAML files
-- **Kubernetes Manifest Validation**: Use `kubeconform` to validate Kubernetes manifests
+- **Nix Environment**: Use `nix develop` for reproducible development environment
+- **Conventional Commits**: Enforce via git hooks for semantic versioning
+- **Comprehensive Linting**: Go, YAML, Markdown, Shell, Nix, GitHub Actions
+- **Kubernetes Manifest Validation**: Use `kubeconform` with strict mode and CRD schemas
 
 ## Commits
 
@@ -67,20 +68,42 @@ Built for ML engineers with budget homelabs who need occasional GPU access witho
 
 ## Task Commands
 
-- `task setup` - Complete development environment setup
+### Development
+- `task setup` - Complete development environment setup (git hooks + test env)
 - `task dev:build` - Build manager binary
-- `task dev:lint` - Run linters
+- `task dev:generate` - Generate Go code (deepcopy methods)
+- `task dev:clean` - Clean build artifacts
+
+### Testing
 - `task test:unit` - Run unit tests
 - `task test:integration` - Run all integration tests (envtest + Talos Docker)
 - `task test:e2e` - Run true e2e tests against real cloud providers
 - `task test:all` - Run all safe tests (unit + integration)
-- `task test:provision-talos-cloud` - Provision cloud-based Talos cluster
+
+### Linting & Formatting
+- `task lint:all` - Run all linting checks
+- `task lint:fix-all` - Auto-fix all formatting issues
+- `task lint:go` - Go-specific linting and formatting
+- `task lint:yaml` - YAML linting and formatting
+- `task lint:markdown` - Markdown linting
+
+### Container & Deployment
 - `task docker:build` - Build rootless container image
 - `task docker:push` - Push container to registry
-- `task chart:template` - Generate Kubernetes manifests
-- `task chart:validate` - Validate CUE and YAML files
+- `task docker:push-release` - Push with semantic version tags
+- `task chart:template` - Generate Helm templates
+- `task chart:validate` - Validate Helm chart and manifests
+- `task chart:push-oci` - Push chart as OCI artifact to GHCR
+
+### Release
+- `task release:next-version` - Show next semantic version
+- `task release:preview-changelog` - Preview changelog for next release
+- `task release:release` - Create full automated release
+- `task release:auto-release` - Trigger GitHub Actions release workflow
+
+### Workflows
+- `task ci` - Full CI workflow (deps, build, test, lint)
 - `task deploy` - Build container and generate chart
-- `task ci` - Full CI workflow
 
 ## Testing Strategy
 
@@ -90,15 +113,21 @@ Built for ML engineers with budget homelabs who need occasional GPU access witho
 
 ## Installation
 
-Deploy via CUE-generated Kubernetes manifests:
-
+### Via Helm Chart (Recommended)
 ```bash
-task chart:generate
-kubectl apply -f dist/chart/
+helm install tgp-operator oci://ghcr.io/solanyn/charts/tgp-operator \
+  --version 0.1.0 \
+  --namespace tgp-system \
+  --create-namespace
 ```
 
-Create provider secrets:
+### Via Generated Manifests
+```bash
+task chart:template
+kubectl apply -f dist/chart/tgp-operator/templates/
+```
 
+### Configure Provider Secrets
 ```bash
 kubectl create secret generic tgp-provider-secrets \
   --from-literal=VAST_API_KEY=your-key \
@@ -106,4 +135,25 @@ kubectl create secret generic tgp-provider-secrets \
   --from-literal=LAMBDA_LABS_API_KEY=your-key \
   --from-literal=PAPERSPACE_API_KEY=your-key \
   -n tgp-system
+```
+
+## Development Setup
+
+### Prerequisites
+- [Nix](https://nixos.org/download.html) with flakes enabled
+- [direnv](https://direnv.net/) (optional but recommended)
+
+### Environment Setup
+```bash
+git clone https://github.com/solanyn/tgp-operator
+cd tgp-operator
+
+# Option 1: With direnv (automatic)
+direnv allow
+
+# Option 2: Manual nix shell
+nix develop
+
+# Initialize development environment
+task setup
 ```

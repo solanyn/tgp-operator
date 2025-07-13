@@ -76,4 +76,4 @@ tasks:
         msg: "GitHub CLI not found. Install with: brew install gh && gh auth login"
     cmds:
       - gh workflow run release.yml
-      - echo "Release workflow triggered! Check: gh run list -w release.yml"
+      - echo "Release workflow triggered! Check with gh run list -w release.yml"
