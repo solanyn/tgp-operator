@@ -3,10 +3,11 @@ version: '3'
 tasks:
 
   generate:
-    desc: Generate code (deepcopy methods, etc.)
+    desc: Generate code (deepcopy methods, CRDs, etc.)
     cmds:
       - go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
       - $(go env GOPATH)/bin/controller-gen object paths="./pkg/api/..."
+      - $(go env GOPATH)/bin/controller-gen crd paths="./pkg/api/..." output:crd:artifacts:config=config/crd/bases
 
   build:
     desc: Build the manager binary

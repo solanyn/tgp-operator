@@ -30,11 +30,9 @@ tasks:
 
   setup-talos:
     desc: Create Docker-based Talos cluster for e2e tests
-    preconditions:
-      - sh: command -v talosctl
-        msg: "talosctl not found. Install with: curl -sL https://talos.dev/install | sh"
     cmds:
       - echo "Creating Docker-based Talos cluster..."
+      - echo "Note: talosctl must be installed separately (not in Nix environment)"
       - talosctl cluster create --name {{.KIND_CLUSTER_NAME}} --workers 2 --wait
       - talosctl --nodes 10.5.0.2 kubeconfig --force
       - echo "Talos cluster created and kubeconfig updated"
@@ -43,9 +41,6 @@ tasks:
 
   cleanup-talos:
     desc: Destroy Docker-based Talos cluster
-    preconditions:
-      - sh: command -v talosctl
-        msg: "talosctl not found. Install with: curl -sL https://talos.dev/install | sh"
     cmds:
       - talosctl cluster destroy --name {{.KIND_CLUSTER_NAME}}
       - echo "Talos cluster destroyed"
