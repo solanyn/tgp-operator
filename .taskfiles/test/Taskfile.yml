@@ -32,7 +32,7 @@ tasks:
     desc: Create Docker-based Talos cluster for e2e tests
     cmds:
       - echo "Creating Docker-based Talos cluster..."
-      - echo "Note: talosctl must be installed separately (not in Nix environment)"
+      - echo "Note - talosctl must be installed separately (not in Nix environment)"
       - talosctl cluster create --name {{.KIND_CLUSTER_NAME}} --workers 2 --wait
       - talosctl --nodes 10.5.0.2 kubeconfig --force
       - echo "Talos cluster created and kubeconfig updated"
