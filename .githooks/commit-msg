@@ -1,0 +1,23 @@
+#!/bin/sh
+#
+# Conventional Commits validation hook
+# This hook validates that commit messages follow the conventional commits format
+
+commit_regex='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?(!)?: .{1,50}'
+
+error_msg="Aborting commit. Your commit message is invalid. See .gitmessage for examples.
+
+Valid format: <type>[optional scope]: <description>
+
+Examples:
+  feat: add GPU request validation
+  fix: handle provider timeout errors  
+  docs: update installation guide
+  feat!: change API structure (breaking change)
+
+Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+
+if ! grep -qE "$commit_regex" "$1"; then
+    echo "$error_msg" >&2
+    exit 1
+fi
