@@ -7,9 +7,6 @@ vars:
 tasks:
   build:
     desc: Build container image
-    preconditions:
-      - sh: command -v docker
-        msg: "Docker not found. Install Docker Desktop or Docker Engine"
     cmds:
       - docker build -t {{.IMAGE_REPO}}:{{.IMAGE_TAG}} .
       - docker tag {{.IMAGE_REPO}}:{{.IMAGE_TAG}} {{.IMAGE_REPO}}:latest

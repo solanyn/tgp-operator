@@ -69,11 +69,8 @@ tasks:
       - echo "Changelog preview for {{.NEXT_VERSION}}:"
       - git-chglog --next-tag {{.NEXT_VERSION}} --template .chglog/CHANGELOG.tpl.md {{.NEXT_VERSION}}
 
-  auto-release:
+  autorelease:
     desc: Trigger GitHub Actions release workflow
-    preconditions:
-      - sh: command -v gh
-        msg: "GitHub CLI not found. Install with: brew install gh && gh auth login"
     cmds:
       - gh workflow run release.yml
       - echo "Release workflow triggered! Check with gh run list -w release.yml"

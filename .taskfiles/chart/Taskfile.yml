@@ -5,20 +5,21 @@ vars:
   OUTPUT_DIR: dist/chart
 
 tasks:
+  crd:
+    desc: Sync generated CRD to Helm chart
+    deps: [dev:generate]
+    cmds:
+      - cp config/crd/bases/tgp.io_gpurequests.yaml {{.CHART_DIR}}/templates/crd.yaml
+
   template:
     desc: Generate Helm templates for testing
-    preconditions:
-      - sh: command -v helm
-        msg: "Helm not found. Install with: brew install helm"
+    deps: [crd]
     cmds:
       - mkdir -p {{.OUTPUT_DIR}}
       - helm template tgp-operator {{.CHART_DIR}} --output-dir {{.OUTPUT_DIR}} --namespace tgp-system
 
   validate:
     desc: Validate Helm chart and templates
-    preconditions:
-      - sh: command -v helm
-        msg: "Helm not found. Install with: brew install helm"
     cmds:
       - helm lint {{.CHART_DIR}}
       - task: template
