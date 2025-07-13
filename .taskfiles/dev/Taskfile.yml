@@ -6,7 +6,7 @@ tasks:
     desc: Generate code (deepcopy methods, etc.)
     cmds:
       - go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
-      - controller-gen object paths="./pkg/api/..."
+      - $(go env GOPATH)/bin/controller-gen object paths="./pkg/api/..."
 
   build:
     desc: Build the manager binary

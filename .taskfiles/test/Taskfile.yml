@@ -2,7 +2,7 @@ version: '3'
 
 env:
   KUBEBUILDER_ASSETS:
-    sh: setup-envtest use 1.28.0 -p path 2>/dev/null || echo ""
+    sh: $(go env GOPATH)/bin/setup-envtest use 1.28.0 -p path 2>/dev/null || echo ""
   KIND_CLUSTER_NAME: tgp-operator-test
 
 tasks:
@@ -10,7 +10,7 @@ tasks:
     desc: Setup envtest environment
     cmds:
       - go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
-      - setup-envtest use 1.28.0
+      - $(go env GOPATH)/bin/setup-envtest use 1.28.0
     status:
       - test -n "{{.KUBEBUILDER_ASSETS}}"
 
