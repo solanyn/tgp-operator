@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tgp-operator.fullname" . }}-controller-manager
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "tgp-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: manager
+spec:
+  replicas: {{ .Values.controller.replicas }}
+  selector:
+    matchLabels:
+      {{- include "tgp-operator.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: manager
+  template:
+    metadata:
+      labels:
+        {{- include "tgp-operator.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: manager
+    spec:
+      serviceAccountName: {{ include "tgp-operator.serviceAccountName" . }}
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 65532
+      containers:
+      - name: manager
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        securityContext:
+          {{- toYaml .Values.controller.securityContext | nindent 10 }}
+        command:
+        - /manager
+        args:
+        - --health-probe-bind-address=:{{ .Values.health.port }}
+        - --metrics-bind-address=:{{ .Values.metrics.port }}
+        - --leader-elect
+        env:
+        - name: VAST_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.providers.vastai.secretName }}
+              key: {{ .Values.providers.vastai.secretKey }}
+              optional: true
+        - name: RUNPOD_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.providers.runpod.secretName }}
+              key: {{ .Values.providers.runpod.secretKey }}
+              optional: true
+        - name: LAMBDA_LABS_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.providers.lambdaLabs.secretName }}
+              key: {{ .Values.providers.lambdaLabs.secretKey }}
+              optional: true
+        - name: PAPERSPACE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.providers.paperspace.secretName }}
+              key: {{ .Values.providers.paperspace.secretKey }}
+              optional: true
+        ports:
+        - containerPort: {{ .Values.metrics.port }}
+          name: metrics
+          protocol: TCP
+        - containerPort: {{ .Values.health.port }}
+          name: health
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: {{ .Values.health.port }}
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: {{ .Values.health.port }}
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          {{- toYaml .Values.controller.resources | nindent 10 }}
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      {{- with .Values.controller.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.controller.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.controller.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

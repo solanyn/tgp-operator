@@ -1,0 +1,27 @@
+{{- if .Values.rbac.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "tgp-operator.fullname" . }}-manager
+  labels:
+    {{- include "tgp-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups: ["tgp.io"]
+  resources: ["gpurequests"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["tgp.io"]
+  resources: ["gpurequests/status"]
+  verbs: ["get", "update", "patch"]
+- apiGroups: ["tgp.io"]
+  resources: ["gpurequests/finalizers"]
+  verbs: ["update"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+{{- end }}
