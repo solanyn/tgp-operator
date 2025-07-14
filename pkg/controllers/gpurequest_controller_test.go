@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -15,8 +16,82 @@ import (
 	tgpv1 "github.com/solanyn/tgp-operator/pkg/api/v1"
 	"github.com/solanyn/tgp-operator/pkg/pricing"
 	"github.com/solanyn/tgp-operator/pkg/providers"
-	"github.com/solanyn/tgp-operator/pkg/providers/vast"
 )
+
+// mockProvider implements ProviderClient for testing
+type mockProvider struct {
+	name           string
+	shouldFail     bool
+	instanceStatus *providers.InstanceStatus
+	terminateError error
+}
+
+func (m *mockProvider) GetProviderInfo() *providers.ProviderInfo {
+	return &providers.ProviderInfo{Name: m.name}
+}
+
+func (m *mockProvider) GetRateLimits() *providers.RateLimitInfo {
+	return &providers.RateLimitInfo{RequestsPerSecond: 10}
+}
+
+func (m *mockProvider) TranslateGPUType(standard string) (string, error) {
+	return standard, nil
+}
+
+func (m *mockProvider) TranslateRegion(standard string) (string, error) {
+	return standard, nil
+}
+
+func (m *mockProvider) GetNormalizedPricing(ctx context.Context, gpuType, region string) (*providers.NormalizedPricing, error) {
+	if m.shouldFail {
+		return nil, fmt.Errorf("pricing failed")
+	}
+	return &providers.NormalizedPricing{
+		PricePerHour:   0.50,
+		PricePerSecond: 0.50 / 3600,
+		Currency:       "USD",
+		BillingModel:   providers.BillingPerHour,
+		LastUpdated:    time.Now(),
+	}, nil
+}
+
+func (m *mockProvider) LaunchInstance(ctx context.Context, req *providers.LaunchRequest) (*providers.GPUInstance, error) {
+	if m.shouldFail {
+		return nil, fmt.Errorf("launch failed")
+	}
+	return &providers.GPUInstance{
+		ID:        "test-instance-123",
+		Status:    providers.InstanceStatePending,
+		PublicIP:  "192.168.1.100",
+		PrivateIP: "10.0.0.100",
+		CreatedAt: time.Now(),
+	}, nil
+}
+
+func (m *mockProvider) GetInstanceStatus(ctx context.Context, instanceID string) (*providers.InstanceStatus, error) {
+	if m.shouldFail {
+		return nil, fmt.Errorf("status check failed")
+	}
+	if m.instanceStatus != nil {
+		return m.instanceStatus, nil
+	}
+	return &providers.InstanceStatus{
+		State:     providers.InstanceStateRunning,
+		Message:   "Instance is running",
+		UpdatedAt: time.Now(),
+	}, nil
+}
+
+func (m *mockProvider) TerminateInstance(ctx context.Context, instanceID string) error {
+	if m.terminateError != nil {
+		return m.terminateError
+	}
+	return nil
+}
+
+func (m *mockProvider) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFilters) ([]providers.GPUOffer, error) {
+	return nil, nil
+}
 
 func TestGPURequestController_Reconcile(t *testing.T) {
 	scheme := runtime.NewScheme()
@@ -34,7 +109,7 @@ func TestGPURequestController_Reconcile(t *testing.T) {
 		Log:    zap.New(zap.UseDevMode(true)),
 		Scheme: scheme,
 		Providers: map[string]providers.ProviderClient{
-			"vast.ai": vast.NewClient("test-api-key"),
+			"vast.ai": &mockProvider{name: "vast.ai"},
 		},
 		PricingCache: pricing.NewCache(time.Minute * 5),
 	}
@@ -159,6 +234,17 @@ func TestGPURequestController_Reconcile(t *testing.T) {
 	})
 
 	t.Run("should handle deletion", func(t *testing.T) {
+		// Create a separate reconciler with a mock provider that terminates successfully
+		successfulReconciler := &GPURequestReconciler{
+			Client: fakeClient,
+			Log:    zap.New(zap.UseDevMode(true)),
+			Scheme: scheme,
+			Providers: map[string]providers.ProviderClient{
+				"vast.ai": &mockProvider{name: "vast.ai"}, // No termination error
+			},
+			PricingCache: pricing.NewCache(time.Minute * 5),
+		}
+
 		gpuRequest := &tgpv1.GPURequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:       "test-deletion",
@@ -190,7 +276,7 @@ func TestGPURequestController_Reconcile(t *testing.T) {
 			},
 		}
 
-		result, err := reconciler.Reconcile(ctx, req)
+		result, err := successfulReconciler.Reconcile(ctx, req)
 		if err != nil {
 			t.Errorf("Expected no error, got: %v", err)
 		}
@@ -216,7 +302,7 @@ func TestGPURequestController_handlePending(t *testing.T) {
 		Log:    zap.New(zap.UseDevMode(true)),
 		Scheme: scheme,
 		Providers: map[string]providers.ProviderClient{
-			"vast.ai": vast.NewClient("test-api-key"),
+			"vast.ai": &mockProvider{name: "vast.ai"},
 		},
 		PricingCache: pricing.NewCache(time.Minute * 5),
 	}
@@ -262,19 +348,29 @@ func TestGPURequestController_handleProvisioning(t *testing.T) {
 		WithStatusSubresource(&tgpv1.GPURequest{}).
 		Build()
 
-	reconciler := &GPURequestReconciler{
-		Client: fakeClient,
-		Log:    zap.New(zap.UseDevMode(true)),
-		Scheme: scheme,
-		Providers: map[string]providers.ProviderClient{
-			"vast.ai": vast.NewClient("test-api-key"),
-		},
-		PricingCache: pricing.NewCache(time.Minute * 5),
-	}
-
 	ctx := context.Background()
 
 	t.Run("should simulate provisioning and update to ready", func(t *testing.T) {
+		// Use a mock provider that returns Pending status initially
+		mockProv := &mockProvider{
+			name: "vast.ai",
+			instanceStatus: &providers.InstanceStatus{
+				State:     providers.InstanceStatePending,
+				Message:   "Instance is starting",
+				UpdatedAt: time.Now(),
+			},
+		}
+
+		reconc := &GPURequestReconciler{
+			Client: fakeClient,
+			Log:    zap.New(zap.UseDevMode(true)),
+			Scheme: scheme,
+			Providers: map[string]providers.ProviderClient{
+				"vast.ai": mockProv,
+			},
+			PricingCache: pricing.NewCache(time.Minute * 5),
+		}
+
 		gpuRequest := &tgpv1.GPURequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-request",
@@ -293,12 +389,12 @@ func TestGPURequestController_handleProvisioning(t *testing.T) {
 			t.Fatalf("Failed to create GPURequest: %v", err)
 		}
 
-		result, err := reconciler.handleProvisioning(ctx, gpuRequest, reconciler.Log)
+		result, err := reconc.handleProvisioning(ctx, gpuRequest, reconc.Log)
 		if err != nil {
 			t.Errorf("Expected no error, got: %v", err)
 		}
-		if result.RequeueAfter != time.Second*30 {
-			t.Errorf("Expected requeue after 30 seconds, got: %v", result.RequeueAfter)
+		if result.RequeueAfter != ProvisioningRequeue {
+			t.Errorf("Expected requeue after %v, got: %v", ProvisioningRequeue, result.RequeueAfter)
 		}
 		if gpuRequest.Status.Phase != tgpv1.GPURequestPhaseProvisioning {
 			t.Errorf("Expected phase to be %s, got: %s", tgpv1.GPURequestPhaseProvisioning, gpuRequest.Status.Phase)
