@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	tgpv1 "github.com/solanyn/tgp-operator/pkg/api/v1"
 	"github.com/solanyn/tgp-operator/pkg/providers"
 )
 
@@ -19,8 +18,24 @@ func NewClient(apiKey string) *Client {
 	}
 }
 
-func (c *Client) GetProviderName() string {
-	return "lambda-labs"
+func (c *Client) GetProviderInfo() *providers.ProviderInfo {
+	return &providers.ProviderInfo{Name: "lambda-labs"}
+}
+
+func (c *Client) GetRateLimits() *providers.RateLimitInfo {
+	return &providers.RateLimitInfo{RequestsPerSecond: 5}
+}
+
+func (c *Client) TranslateGPUType(standard string) (string, error) {
+	return standard, nil
+}
+
+func (c *Client) TranslateRegion(standard string) (string, error) {
+	return standard, nil
+}
+
+func (c *Client) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFilters) ([]providers.GPUOffer, error) {
+	return []providers.GPUOffer{}, nil
 }
 
 func (c *Client) ListOffers(ctx context.Context, gpuType string, region string) ([]providers.GPUOffer, error) {
@@ -38,7 +53,7 @@ func (c *Client) ListOffers(ctx context.Context, gpuType string, region string) 
 	}, nil
 }
 
-func (c *Client) LaunchInstance(ctx context.Context, spec tgpv1.GPURequestSpec) (*providers.GPUInstance, error) {
+func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchRequest) (*providers.GPUInstance, error) {
 	return &providers.GPUInstance{
 		ID:        fmt.Sprintf("lambda-%d", time.Now().Unix()),
 		Status:    providers.InstanceStatePending,
@@ -59,12 +74,12 @@ func (c *Client) TerminateInstance(ctx context.Context, instanceID string) error
 	return nil
 }
 
-func (c *Client) GetPricing(ctx context.Context, gpuType string, region string) (*providers.PricingInfo, error) {
-	return &providers.PricingInfo{
-		GPUType:     gpuType,
-		Region:      region,
-		HourlyPrice: 0.45,
-		Currency:    "USD",
-		LastUpdated: time.Now(),
+func (c *Client) GetNormalizedPricing(ctx context.Context, gpuType string, region string) (*providers.NormalizedPricing, error) {
+	return &providers.NormalizedPricing{
+		PricePerSecond: 0.45 / 3600,
+		PricePerHour:   0.45,
+		Currency:       "USD",
+		BillingModel:   providers.BillingPerMinute,
+		LastUpdated:    time.Now(),
 	}, nil
 }
