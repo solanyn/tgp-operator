@@ -73,7 +73,7 @@ func (in *GPURequestSpec) DeepCopyInto(out *GPURequestSpec) {
 	*out = *in
 	if in.MaxHourlyPrice != nil {
 		in, out := &in.MaxHourlyPrice, &out.MaxHourlyPrice
-		*out = new(float64)
+		*out = new(string)
 		**out = **in
 	}
 	if in.TTL != nil {
