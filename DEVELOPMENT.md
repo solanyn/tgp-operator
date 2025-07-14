@@ -4,9 +4,9 @@
 
 ### Prerequisites
 
-- [Nix](https://nixos.org/download.html) with flakes enabled
-- [direnv](https://direnv.net/) (optional but recommended)
+- [mise](https://mise.jdx.dev/) for tool version management
 - Docker for container builds
+- System packages: jq, yq, kubeconform, yamllint, markdownlint-cli, shellcheck, gh
 
 ### Environment Setup
 
@@ -14,15 +14,46 @@
 git clone https://github.com/solanyn/tgp-operator
 cd tgp-operator
 
-# Option 1: With direnv (automatic)
-direnv allow
+# Install tool versions (go, task, kubectl, helm)
+mise install
 
-# Option 2: Manual nix shell
-nix develop
+# Setup development tools (golangci-lint, controller-gen, etc.)
+./scripts/setup-dev-tools.sh
 
 # Initialize development environment
 task setup
 ```
+
+### Installation Guide
+
+1. **Install mise**:
+   ```bash
+   # macOS
+   brew install mise
+   
+   # Linux
+   curl https://mise.jdx.dev/install.sh | sh
+   ```
+
+2. **Install system packages**:
+   ```bash
+   # macOS
+   brew install jq yq kubeconform yamllint markdownlint-cli shellcheck gh docker
+
+   # Ubuntu/Debian
+   apt install jq docker.io shellcheck
+   npm install -g markdownlint-cli
+   
+   # Arch Linux
+   pacman -S jq docker shellcheck
+   ```
+
+3. **Setup environment**:
+   ```bash
+   mise install
+   ./scripts/setup-dev-tools.sh
+   task setup
+   ```
 
 ## Task Commands
 

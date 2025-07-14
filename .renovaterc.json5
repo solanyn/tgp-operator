@@ -47,9 +47,10 @@
       "automerge": true
     },
     {
-      "matchManagers": ["nix"],
-      "automerge": false,
-      "labels": ["nix-update"]
+      "matchManagers": ["asdf"],
+      "commitMessageTopic": "tool {{depName}}",
+      "automerge": true,
+      "labels": ["mise-update"]
     }
   ]
 }
