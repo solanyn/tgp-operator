@@ -20,60 +20,33 @@ func TestNewClient(t *testing.T) {
 	})
 }
 
-func TestClient_GetProviderName(t *testing.T) {
+func TestClient_GetProviderInfo(t *testing.T) {
 	client := NewClient("fake-api-key")
 
-	t.Run("should return provider name", func(t *testing.T) {
-		name := client.GetProviderName()
-		if name != "runpod" {
-			t.Errorf("Expected provider name to be 'runpod', got: %s", name)
+	t.Run("should return provider info", func(t *testing.T) {
+		info := client.GetProviderInfo()
+		if info.Name != "runpod" {
+			t.Errorf("Expected provider name to be 'runpod', got: %s", info.Name)
 		}
 	})
 }
 
-func TestClient_ListOffers(t *testing.T) {
-	client := NewClient("fake-api-key")
-	ctx := context.Background()
-
-	t.Run("should return mock offers for testing", func(t *testing.T) {
-		offers, err := client.ListOffers(ctx, "RTX3090", "us-east-1")
-		if err != nil {
-			t.Errorf("Expected no error, got: %v", err)
-		}
-		if len(offers) != 1 {
-			t.Errorf("Expected 1 offer, got: %d", len(offers))
-		}
-
-		offer := offers[0]
-		if offer.Provider != "runpod" {
-			t.Errorf("Expected provider to be 'runpod', got: %s", offer.Provider)
-		}
-		if offer.GPUType != "RTX3090" {
-			t.Errorf("Expected GPU type to be 'RTX3090', got: %s", offer.GPUType)
-		}
-		if offer.Region != "us-east-1" {
-			t.Errorf("Expected region to be 'us-east-1', got: %s", offer.Region)
-		}
-		if offer.HourlyPrice <= 0 {
-			t.Errorf("Expected price to be > 0, got: %f", offer.HourlyPrice)
-		}
-	})
-}
 
 func TestClient_LaunchInstance(t *testing.T) {
 	client := NewClient("fake-api-key")
 	ctx := context.Background()
 
 	t.Run("should launch a mock instance", func(t *testing.T) {
-		spec := tgpv1.GPURequestSpec{
-			Provider: "runpod",
-			GPUType:  "RTX3090",
-			TalosConfig: tgpv1.TalosConfig{
+		req := &providers.LaunchRequest{
+			GPUType: "RTX3090",
+			Region:  "us-east-1",
+			Image:   "factory.talos.dev/installer/test:v1.8.2",
+			TalosConfig: &tgpv1.TalosConfig{
 				Image: "factory.talos.dev/installer/test:v1.8.2",
 			},
 		}
 
-		instance, err := client.LaunchInstance(ctx, spec)
+		instance, err := client.LaunchInstance(ctx, req)
 		if err != nil {
 			t.Errorf("Expected no error, got: %v", err)
 		}
@@ -113,20 +86,17 @@ func TestClient_TerminateInstance(t *testing.T) {
 	})
 }
 
-func TestClient_GetPricing(t *testing.T) {
+func TestClient_GetNormalizedPricing(t *testing.T) {
 	client := NewClient("fake-api-key")
 	ctx := context.Background()
 
-	t.Run("should return pricing info", func(t *testing.T) {
-		pricing, err := client.GetPricing(ctx, "RTX3090", "us-east-1")
+	t.Run("should return normalized pricing info", func(t *testing.T) {
+		pricing, err := client.GetNormalizedPricing(ctx, "RTX3090", "us-east-1")
 		if err != nil {
 			t.Errorf("Expected no error, got: %v", err)
 		}
-		if pricing.GPUType != "RTX3090" {
-			t.Errorf("Expected GPU type to be 'RTX3090', got: %s", pricing.GPUType)
-		}
-		if pricing.HourlyPrice <= 0 {
-			t.Errorf("Expected price to be > 0, got: %f", pricing.HourlyPrice)
+		if pricing.PricePerHour <= 0 {
+			t.Errorf("Expected price to be > 0, got: %f", pricing.PricePerHour)
 		}
 	})
 }
