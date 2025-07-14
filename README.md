@@ -51,12 +51,14 @@ apiVersion: tgp.io/v1
 kind: GPURequest
 metadata:
   name: my-gpu-workload
-  namespace: default
+  # Note: GPURequest is cluster-scoped (no namespace)
 spec:
+  provider: "vast.ai"
   gpuType: "RTX4090"
   region: "us-east"
+  maxHourlyPrice: "2.00"
   talosConfig:
-    image: "ghcr.io/siderolabs/talos:v1.5.0"
+    image: "ghcr.io/siderolabs/talos:v1.8.0"
     wireGuardConfig:
       privateKey: "your-private-key"
       publicKey: "your-public-key"

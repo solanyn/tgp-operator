@@ -12,7 +12,7 @@ spec:
     listKind: GPURequestList
     plural: gpurequests
     singular: gpurequest
-  scope: Namespaced
+  scope: Cluster
   versions:
   - additionalPrinterColumns:
     - jsonPath: .spec.provider
