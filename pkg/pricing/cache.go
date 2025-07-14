@@ -11,7 +11,7 @@ import (
 )
 
 type cacheEntry struct {
-	pricing   map[string]*providers.PricingInfo
+	pricing   map[string]*providers.NormalizedPricing
 	timestamp time.Time
 }
 
@@ -36,7 +36,7 @@ func (c *Cache) isExpired(entry *cacheEntry) bool {
 	return time.Since(entry.timestamp) > c.ttl
 }
 
-func (c *Cache) GetPricing(ctx context.Context, providerClients map[string]providers.ProviderClient, gpuType, region string) (map[string]*providers.PricingInfo, error) {
+func (c *Cache) GetPricing(ctx context.Context, providerClients map[string]providers.ProviderClient, gpuType, region string) (map[string]*providers.NormalizedPricing, error) {
 	key := c.getCacheKey(gpuType, region)
 
 	c.mutex.RLock()
@@ -55,10 +55,10 @@ func (c *Cache) GetPricing(ctx context.Context, providerClients map[string]provi
 		return entry.pricing, nil
 	}
 
-	pricing := make(map[string]*providers.PricingInfo)
+	pricing := make(map[string]*providers.NormalizedPricing)
 
 	for providerName, provider := range providerClients {
-		priceInfo, err := provider.GetPricing(ctx, gpuType, region)
+		priceInfo, err := provider.GetNormalizedPricing(ctx, gpuType, region)
 		if err != nil {
 			continue
 		}
@@ -73,7 +73,7 @@ func (c *Cache) GetPricing(ctx context.Context, providerClients map[string]provi
 	return pricing, nil
 }
 
-func (c *Cache) GetBestPrice(ctx context.Context, providerClients map[string]providers.ProviderClient, gpuType, region string) (*providers.PricingInfo, error) {
+func (c *Cache) GetBestPrice(ctx context.Context, providerClients map[string]providers.ProviderClient, gpuType, region string) (*providers.NormalizedPricing, error) {
 	pricing, err := c.GetPricing(ctx, providerClients, gpuType, region)
 	if err != nil {
 		return nil, err
@@ -83,32 +83,32 @@ func (c *Cache) GetBestPrice(ctx context.Context, providerClients map[string]pro
 		return nil, fmt.Errorf("no pricing available for %s in %s", gpuType, region)
 	}
 
-	var bestPrice *providers.PricingInfo
+	var bestPrice *providers.NormalizedPricing
 	var lowestPrice float64
 
 	for _, price := range pricing {
-		if bestPrice == nil || price.HourlyPrice < lowestPrice {
+		if bestPrice == nil || price.PricePerHour < lowestPrice {
 			bestPrice = price
-			lowestPrice = price.HourlyPrice
+			lowestPrice = price.PricePerHour
 		}
 	}
 
 	return bestPrice, nil
 }
 
-func (c *Cache) GetSortedPricing(ctx context.Context, providerClients map[string]providers.ProviderClient, gpuType, region string) ([]*providers.PricingInfo, error) {
+func (c *Cache) GetSortedPricing(ctx context.Context, providerClients map[string]providers.ProviderClient, gpuType, region string) ([]*providers.NormalizedPricing, error) {
 	pricing, err := c.GetPricing(ctx, providerClients, gpuType, region)
 	if err != nil {
 		return nil, err
 	}
 
-	var sortedPricing []*providers.PricingInfo
+	var sortedPricing []*providers.NormalizedPricing
 	for _, price := range pricing {
 		sortedPricing = append(sortedPricing, price)
 	}
 
 	sort.Slice(sortedPricing, func(i, j int) bool {
-		return sortedPricing[i].HourlyPrice < sortedPricing[j].HourlyPrice
+		return sortedPricing[i].PricePerHour < sortedPricing[j].PricePerHour
 	})
 
 	return sortedPricing, nil

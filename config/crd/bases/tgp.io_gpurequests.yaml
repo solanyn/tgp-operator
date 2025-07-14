@@ -220,6 +220,10 @@ spec:
                 description: PublicIP is the public IP address of the provisioned
                   instance
                 type: string
+              selectedProvider:
+                description: SelectedProvider is the cloud provider that was chosen
+                  for this request
+                type: string
               terminationScheduledAt:
                 description: TerminationScheduledAt is the calculated termination
                   time based on maxLifetime
