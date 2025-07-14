@@ -33,6 +33,16 @@ jobs:
     - name: Validate Helm chart
       run: |
         nix develop --command task chart:validate
+    
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: |
+          cover.out
+          test-results.xml
+        retention-days: 3
 
   security:
     runs-on: ubuntu-latest
