@@ -26,8 +26,8 @@ type GPURequestSpec struct {
 	// MaxHourlyPrice sets the maximum price per hour willing to pay (as string, e.g., "1.50")
 	MaxHourlyPrice *string `json:"maxHourlyPrice,omitempty"`
 
-	// TTL specifies how long the node should live before automatic termination
-	TTL *metav1.Duration `json:"ttl,omitempty"`
+	// MaxLifetime specifies the maximum time the node can exist before forced termination
+	MaxLifetime *metav1.Duration `json:"maxLifetime,omitempty"`
 
 	// IdleTimeout specifies how long the node can be idle before termination
 	IdleTimeout *metav1.Duration `json:"idleTimeout,omitempty"`

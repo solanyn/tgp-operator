@@ -66,6 +66,10 @@ spec:
                 description: MaxHourlyPrice sets the maximum price per hour willing
                   to pay (as string, e.g., "1.50")
                 type: string
+              maxLifetime:
+                description: MaxLifetime specifies the maximum time the node can exist
+                  before forced termination
+                type: string
               provider:
                 description: Provider specifies which cloud provider to use
                 type: string
@@ -116,10 +120,6 @@ spec:
                 - image
                 - wireGuardConfig
                 type: object
-              ttl:
-                description: TTL specifies how long the node should live before automatic
-                  termination
-                type: string
             required:
             - gpuType
             - provider
