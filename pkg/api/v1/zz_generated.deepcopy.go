@@ -76,8 +76,8 @@ func (in *GPURequestSpec) DeepCopyInto(out *GPURequestSpec) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.TTL != nil {
-		in, out := &in.TTL, &out.TTL
+	if in.MaxLifetime != nil {
+		in, out := &in.MaxLifetime, &out.MaxLifetime
 		*out = new(metav1.Duration)
 		**out = **in
 	}
