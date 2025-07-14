@@ -9,23 +9,87 @@ import (
 
 // ProviderClient defines the interface for cloud GPU providers
 type ProviderClient interface {
-	// LaunchInstance provisions a new GPU instance
-	LaunchInstance(ctx context.Context, spec v1.GPURequestSpec) (*GPUInstance, error)
-
-	// TerminateInstance terminates an existing GPU instance
+	// Core lifecycle operations
+	LaunchInstance(ctx context.Context, req *LaunchRequest) (*GPUInstance, error)
 	TerminateInstance(ctx context.Context, instanceID string) error
-
-	// GetInstanceStatus retrieves the current status of an instance
 	GetInstanceStatus(ctx context.Context, instanceID string) (*InstanceStatus, error)
 
-	// GetPricing retrieves current pricing for a GPU type in a region
-	GetPricing(ctx context.Context, gpuType, region string) (*PricingInfo, error)
+	// Discovery and pricing with normalization
+	ListAvailableGPUs(ctx context.Context, filters *GPUFilters) ([]GPUOffer, error)
+	GetNormalizedPricing(ctx context.Context, gpuType, region string) (*NormalizedPricing, error)
 
-	// ListOffers lists available GPU offers matching criteria
-	ListOffers(ctx context.Context, gpuType, region string) ([]GPUOffer, error)
+	// Provider metadata and capabilities
+	GetProviderInfo() *ProviderInfo
+	GetRateLimits() *RateLimitInfo
 
-	// GetProviderName returns the name of this provider
-	GetProviderName() string
+	// Resource translation between standard and provider-specific names
+	TranslateGPUType(standard string) (providerSpecific string, err error)
+	TranslateRegion(standard string) (providerSpecific string, err error)
+}
+
+// LaunchRequest contains all parameters needed to launch an instance
+type LaunchRequest struct {
+	GPUType        string
+	Region         string
+	Image          string
+	UserData       string
+	Labels         map[string]string
+	SpotInstance   bool
+	MaxPrice       float64 // Per hour in USD
+	TalosConfig    *v1.TalosConfig
+}
+
+// GPUFilters defines criteria for filtering available GPU offers
+type GPUFilters struct {
+	GPUType      string
+	Region       string
+	MaxPrice     float64 // Per hour in USD
+	MinMemory    int64   // GB
+	MinStorage   int64   // GB
+	SpotOnly     bool
+	OnDemandOnly bool
+}
+
+// NormalizedPricing provides standardized pricing across providers
+type NormalizedPricing struct {
+	PricePerSecond   float64
+	PricePerHour     float64
+	Currency         string
+	BillingModel     BillingModel
+	StorageCost      float64 // Per GB per hour
+	NetworkCost      float64 // Per GB transfer
+	LastUpdated      time.Time
+	ProviderSpecific map[string]interface{} // Provider-specific pricing details
+}
+
+// BillingModel represents how providers charge for usage
+type BillingModel string
+
+const (
+	BillingPerSecond BillingModel = "per-second"
+	BillingPerMinute BillingModel = "per-minute"
+	BillingPerHour   BillingModel = "per-hour"
+)
+
+// ProviderInfo contains metadata about provider capabilities
+type ProviderInfo struct {
+	Name                  string
+	APIVersion           string
+	SupportedRegions     []string
+	SupportedGPUTypes    []string
+	SupportsSpotInstances bool
+	SupportsMultiGPU     bool
+	BillingGranularity   BillingModel
+	MinBillingPeriod     time.Duration
+}
+
+// RateLimitInfo contains rate limiting information for the provider
+type RateLimitInfo struct {
+	RequestsPerSecond int
+	RequestsPerMinute int
+	BurstCapacity     int
+	BackoffStrategy   string
+	ResetWindow       time.Duration
 }
 
 // GPUInstance represents a provisioned GPU instance
@@ -58,15 +122,22 @@ const (
 	InstanceStateUnknown     InstanceState = "unknown"
 )
 
-// PricingInfo contains pricing information for a GPU type
-type PricingInfo struct {
-	GPUType     string
-	Region      string
-	HourlyPrice float64
-	SpotPrice   float64
-	Currency    string
-	LastUpdated time.Time
-}
+// Standard GPU types for translation
+const (
+	GPUTypeRTX4090 = "RTX4090"
+	GPUTypeRTX3090 = "RTX3090"
+	GPUTypeH100    = "H100"
+	GPUTypeA100    = "A100"
+	GPUTypeV100    = "V100"
+)
+
+// Standard regions for translation
+const (
+	RegionUSEast      = "us-east"
+	RegionUSWest      = "us-west"
+	RegionEUCentral   = "eu-central"
+	RegionAsiaPacific = "asia-pacific"
+)
 
 // GPUOffer represents an available GPU offer from a provider
 type GPUOffer struct {
@@ -90,13 +161,4 @@ type ProviderCredentials struct {
 	APISecret string
 	Token     string
 	Endpoint  string
-}
-
-// LaunchConfig contains configuration for launching an instance
-type LaunchConfig struct {
-	Image      string
-	UserData   string
-	SSHKeyName string
-	Labels     map[string]string
-	Metadata   map[string]string
 }
