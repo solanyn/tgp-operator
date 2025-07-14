@@ -127,6 +127,7 @@ const (
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster
 // +kubebuilder:printcolumn:name="Provider",type=string,JSONPath=`.spec.provider`
 // +kubebuilder:printcolumn:name="GPU Type",type=string,JSONPath=`.spec.gpuType`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
