@@ -220,6 +220,11 @@ spec:
                 description: PublicIP is the public IP address of the provisioned
                   instance
                 type: string
+              terminationScheduledAt:
+                description: TerminationScheduledAt is the calculated termination
+                  time based on maxLifetime
+                format: date-time
+                type: string
             type: object
         type: object
     served: true

@@ -106,6 +106,10 @@ func (in *GPURequestStatus) DeepCopyInto(out *GPURequestStatus) {
 		in, out := &in.ProvisionedAt, &out.ProvisionedAt
 		*out = (*in).DeepCopy()
 	}
+	if in.TerminationScheduledAt != nil {
+		in, out := &in.TerminationScheduledAt, &out.TerminationScheduledAt
+		*out = (*in).DeepCopy()
+	}
 	if in.LastHeartbeat != nil {
 		in, out := &in.LastHeartbeat, &out.LastHeartbeat
 		*out = (*in).DeepCopy()
