@@ -74,6 +74,9 @@ type GPURequestStatus struct {
 	// InstanceID is the cloud provider instance identifier
 	InstanceID string `json:"instanceId,omitempty"`
 
+	// SelectedProvider is the cloud provider that was chosen for this request
+	SelectedProvider string `json:"selectedProvider,omitempty"`
+
 	// PublicIP is the public IP address of the provisioned instance
 	PublicIP string `json:"publicIp,omitempty"`
 
