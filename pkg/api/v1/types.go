@@ -89,6 +89,9 @@ type GPURequestStatus struct {
 	// ProvisionedAt is the timestamp when the instance was provisioned
 	ProvisionedAt *metav1.Time `json:"provisionedAt,omitempty"`
 
+	// TerminationScheduledAt is the calculated termination time based on maxLifetime
+	TerminationScheduledAt *metav1.Time `json:"terminationScheduledAt,omitempty"`
+
 	// LastHeartbeat is the last time the node was seen healthy
 	LastHeartbeat *metav1.Time `json:"lastHeartbeat,omitempty"`
 
@@ -179,4 +182,35 @@ func (status *GPURequestStatus) GetHourlyPriceFloat() (float64, error) {
 // SetHourlyPriceFloat sets the HourlyPrice from a float64 value
 func (status *GPURequestStatus) SetHourlyPriceFloat(price float64) {
 	status.HourlyPrice = fmt.Sprintf("%.2f", price)
+}
+
+// UpdateTerminationTime recalculates the termination time based on current maxLifetime
+func (req *GPURequest) UpdateTerminationTime() {
+	if req.Spec.MaxLifetime != nil && req.Status.ProvisionedAt != nil {
+		duration := req.Spec.MaxLifetime.Duration
+		terminationTime := req.Status.ProvisionedAt.Add(duration)
+		req.Status.TerminationScheduledAt = &metav1.Time{Time: terminationTime}
+	} else {
+		req.Status.TerminationScheduledAt = nil
+	}
+}
+
+// IsTerminationDue checks if the node should be terminated based on maxLifetime
+func (req *GPURequest) IsTerminationDue() bool {
+	if req.Status.TerminationScheduledAt == nil {
+		return false
+	}
+	return metav1.Now().After(req.Status.TerminationScheduledAt.Time)
+}
+
+// TimeUntilTermination returns the duration until scheduled termination
+func (req *GPURequest) TimeUntilTermination() *metav1.Duration {
+	if req.Status.TerminationScheduledAt == nil {
+		return nil
+	}
+	remaining := req.Status.TerminationScheduledAt.Time.Sub(metav1.Now().Time)
+	if remaining <= 0 {
+		return &metav1.Duration{Duration: 0}
+	}
+	return &metav1.Duration{Duration: remaining}
 }
