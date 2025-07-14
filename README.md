@@ -51,7 +51,6 @@ apiVersion: tgp.io/v1
 kind: GPURequest
 metadata:
   name: my-gpu-workload
-  # Note: GPURequest is cluster-scoped (no namespace)
 spec:
   provider: "vast.ai"
   gpuType: "RTX4090"
