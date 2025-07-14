@@ -2,6 +2,9 @@
 package v1
 
 import (
+	"fmt"
+	"strconv"
+	
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -20,8 +23,8 @@ type GPURequestSpec struct {
 	// Region specifies the preferred region for provisioning
 	Region string `json:"region,omitempty"`
 
-	// MaxHourlyPrice sets the maximum price per hour willing to pay
-	MaxHourlyPrice *float64 `json:"maxHourlyPrice,omitempty"`
+	// MaxHourlyPrice sets the maximum price per hour willing to pay (as string, e.g., "1.50")
+	MaxHourlyPrice *string `json:"maxHourlyPrice,omitempty"`
 
 	// TTL specifies how long the node should live before automatic termination
 	TTL *metav1.Duration `json:"ttl,omitempty"`
@@ -80,8 +83,8 @@ type GPURequestStatus struct {
 	// NodeName is the Kubernetes node name after joining the cluster
 	NodeName string `json:"nodeName,omitempty"`
 
-	// HourlyPrice is the actual hourly price of the provisioned instance
-	HourlyPrice float64 `json:"hourlyPrice,omitempty"`
+	// HourlyPrice is the actual hourly price of the provisioned instance (as string, e.g., "1.50")
+	HourlyPrice string `json:"hourlyPrice,omitempty"`
 
 	// ProvisionedAt is the timestamp when the instance was provisioned
 	ProvisionedAt *metav1.Time `json:"provisionedAt,omitempty"`
@@ -146,4 +149,33 @@ type GPURequestList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []GPURequest `json:"items"`
+}
+
+// Helper methods for price conversion
+
+// GetMaxHourlyPriceFloat converts the string MaxHourlyPrice to float64
+func (spec *GPURequestSpec) GetMaxHourlyPriceFloat() (float64, error) {
+	if spec.MaxHourlyPrice == nil {
+		return 0, nil
+	}
+	return strconv.ParseFloat(*spec.MaxHourlyPrice, 64)
+}
+
+// SetMaxHourlyPriceFloat sets the MaxHourlyPrice from a float64 value
+func (spec *GPURequestSpec) SetMaxHourlyPriceFloat(price float64) {
+	priceStr := fmt.Sprintf("%.2f", price)
+	spec.MaxHourlyPrice = &priceStr
+}
+
+// GetHourlyPriceFloat converts the string HourlyPrice to float64
+func (status *GPURequestStatus) GetHourlyPriceFloat() (float64, error) {
+	if status.HourlyPrice == "" {
+		return 0, nil
+	}
+	return strconv.ParseFloat(status.HourlyPrice, 64)
+}
+
+// SetHourlyPriceFloat sets the HourlyPrice from a float64 value
+func (status *GPURequestStatus) SetHourlyPriceFloat(price float64) {
+	status.HourlyPrice = fmt.Sprintf("%.2f", price)
 }
