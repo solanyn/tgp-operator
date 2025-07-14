@@ -16,7 +16,66 @@ import (
 
 	tgpv1 "github.com/solanyn/tgp-operator/pkg/api/v1"
 	"github.com/solanyn/tgp-operator/pkg/controllers"
+	"github.com/solanyn/tgp-operator/pkg/pricing"
+	"github.com/solanyn/tgp-operator/pkg/providers"
 )
+
+// mockProvider implements ProviderClient for integration testing
+type mockProvider struct {
+	name string
+}
+
+func (m *mockProvider) GetProviderInfo() *providers.ProviderInfo {
+	return &providers.ProviderInfo{Name: m.name}
+}
+
+func (m *mockProvider) GetRateLimits() *providers.RateLimitInfo {
+	return &providers.RateLimitInfo{RequestsPerSecond: 10}
+}
+
+func (m *mockProvider) TranslateGPUType(standard string) (string, error) {
+	return standard, nil
+}
+
+func (m *mockProvider) TranslateRegion(standard string) (string, error) {
+	return standard, nil
+}
+
+func (m *mockProvider) GetNormalizedPricing(ctx context.Context, gpuType, region string) (*providers.NormalizedPricing, error) {
+	return &providers.NormalizedPricing{
+		PricePerHour:   0.50,
+		PricePerSecond: 0.50 / 3600,
+		Currency:       "USD",
+		BillingModel:   providers.BillingPerHour,
+		LastUpdated:    time.Now(),
+	}, nil
+}
+
+func (m *mockProvider) LaunchInstance(ctx context.Context, req *providers.LaunchRequest) (*providers.GPUInstance, error) {
+	return &providers.GPUInstance{
+		ID:        "integration-test-instance",
+		Status:    providers.InstanceStatePending,
+		PublicIP:  "192.168.1.100",
+		PrivateIP: "10.0.0.100",
+		CreatedAt: time.Now(),
+	}, nil
+}
+
+func (m *mockProvider) GetInstanceStatus(ctx context.Context, instanceID string) (*providers.InstanceStatus, error) {
+	return &providers.InstanceStatus{
+		State:     providers.InstanceStateRunning,
+		Message:   "Instance is running",
+		UpdatedAt: time.Now(),
+	}, nil
+}
+
+func (m *mockProvider) TerminateInstance(ctx context.Context, instanceID string) error {
+	return nil
+}
+
+func (m *mockProvider) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFilters) ([]providers.GPUOffer, error) {
+	return nil, nil
+}
 
 func TestE2E(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -55,11 +114,15 @@ func TestE2E(t *testing.T) {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
 
-	// Setup controller
+	// Setup controller with mock providers
 	if err := (&controllers.GPURequestReconciler{
 		Client: mgr.GetClient(),
 		Log:    zap.New(zap.UseDevMode(true)),
 		Scheme: mgr.GetScheme(),
+		Providers: map[string]providers.ProviderClient{
+			"vast.ai": &mockProvider{name: "vast.ai"},
+		},
+		PricingCache: pricing.NewCache(time.Minute * 5),
 	}).SetupWithManager(mgr); err != nil {
 		t.Fatalf("Failed to setup controller: %v", err)
 	}
