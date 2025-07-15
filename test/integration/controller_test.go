@@ -83,7 +83,7 @@ func TestE2E(t *testing.T) {
 
 	// Setup test environment
 	testEnv := &envtest.Environment{
-		CRDDirectoryPaths: []string{"../../config/crd/bases"},
+		CRDDirectoryPaths:     []string{"../../config/crd/bases"},
 		ErrorIfCRDPathMissing: true,
 	}
 

@@ -1,3 +1,4 @@
+// Package pricing provides caching functionality for GPU pricing across providers
 package pricing
 
 import (

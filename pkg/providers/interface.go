@@ -29,14 +29,14 @@ type ProviderClient interface {
 
 // LaunchRequest contains all parameters needed to launch an instance
 type LaunchRequest struct {
-	GPUType        string
-	Region         string
-	Image          string
-	UserData       string
-	Labels         map[string]string
-	SpotInstance   bool
-	MaxPrice       float64 // Per hour in USD
-	TalosConfig    *v1.TalosConfig
+	GPUType      string
+	Region       string
+	Image        string
+	UserData     string
+	Labels       map[string]string
+	SpotInstance bool
+	MaxPrice     float64 // Per hour in USD
+	TalosConfig  *v1.TalosConfig
 }
 
 // GPUFilters defines criteria for filtering available GPU offers
@@ -74,13 +74,13 @@ const (
 // ProviderInfo contains metadata about provider capabilities
 type ProviderInfo struct {
 	Name                  string
-	APIVersion           string
-	SupportedRegions     []string
-	SupportedGPUTypes    []string
+	APIVersion            string
+	SupportedRegions      []string
+	SupportedGPUTypes     []string
 	SupportsSpotInstances bool
-	SupportsMultiGPU     bool
-	BillingGranularity   BillingModel
-	MinBillingPeriod     time.Duration
+	SupportsMultiGPU      bool
+	BillingGranularity    BillingModel
+	MinBillingPeriod      time.Duration
 }
 
 // RateLimitInfo contains rate limiting information for the provider

@@ -38,7 +38,8 @@ linters-settings:
       - condition
       - return
   govet:
-    check-shadowing: true
+    enable:
+      - shadow
   lll:
     line-length: 140
   maligned:
@@ -55,11 +56,9 @@ linters:
   disable-all: true
   enable:
     - bodyclose
-    - depguard
     - dogsled
     - dupl
     - errcheck
-    - exportloopref
     - exhaustive
     - gci
     - gochecknoinits
@@ -69,7 +68,6 @@ linters:
     - gocyclo
     - gofmt
     - goimports
-    - gomnd
     - goprintffuncname
     - gosec
     - gosimple

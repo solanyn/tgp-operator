@@ -1,9 +1,9 @@
+// Package providers contains the provider implementations for GPU cloud services
 package providers
 
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -12,8 +12,6 @@ import (
 // BaseProvider provides common functionality for all providers
 type BaseProvider struct {
 	limiter    *rate.Limiter
-	lastCall   time.Time
-	mutex      sync.Mutex
 	info       *ProviderInfo
 	rateLimits *RateLimitInfo
 }

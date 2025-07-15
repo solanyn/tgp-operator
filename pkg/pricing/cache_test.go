@@ -57,7 +57,6 @@ func (m *mockProvider) ListAvailableGPUs(ctx context.Context, filters *providers
 	return nil, nil
 }
 
-
 func TestNewCache(t *testing.T) {
 	t.Run("should create a new cache with TTL", func(t *testing.T) {
 		cache := NewCache(time.Minute * 5)

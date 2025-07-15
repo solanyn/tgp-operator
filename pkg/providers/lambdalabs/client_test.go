@@ -31,7 +31,6 @@ func TestClient_GetProviderInfo(t *testing.T) {
 	})
 }
 
-
 func TestClient_LaunchInstance(t *testing.T) {
 	client := NewClient("fake-api-key")
 	ctx := context.Background()
