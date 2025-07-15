@@ -14,6 +14,7 @@ import (
 
 	tgpv1 "github.com/solanyn/tgp-operator/pkg/api/v1"
 	"github.com/solanyn/tgp-operator/pkg/controllers"
+	"github.com/solanyn/tgp-operator/pkg/metrics"
 	"github.com/solanyn/tgp-operator/pkg/pricing"
 	"github.com/solanyn/tgp-operator/pkg/providers"
 	"github.com/solanyn/tgp-operator/pkg/providers/lambdalabs"
@@ -51,6 +52,9 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
+	// Register metrics
+	metrics.RegisterMetrics()
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                  scheme,
 		Metrics:                 ctrl.Options{}.Metrics,
@@ -79,6 +83,7 @@ func main() {
 		Log:          ctrl.Log.WithName("controllers").WithName("GPURequest"),
 		Providers:    providers,
 		PricingCache: pricingCache,
+		Metrics:      metrics.NewMetrics(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GPURequest")
 		os.Exit(1)

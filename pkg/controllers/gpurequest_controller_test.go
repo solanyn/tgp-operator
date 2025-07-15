@@ -90,7 +90,15 @@ func (m *mockProvider) TerminateInstance(ctx context.Context, instanceID string)
 }
 
 func (m *mockProvider) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFilters) ([]providers.GPUOffer, error) {
-	return nil, nil
+	return []providers.GPUOffer{
+		{
+			ID:          "mock-offer-1",
+			GPUType:     "RTX3090",
+			Region:      "us-east",
+			HourlyPrice: 0.50,
+			Available:   true,
+		},
+	}, nil
 }
 
 func TestGPURequestController_Reconcile(t *testing.T) {
@@ -396,8 +404,8 @@ func TestGPURequestController_handleProvisioning(t *testing.T) {
 		if result.RequeueAfter != ProvisioningRequeue {
 			t.Errorf("Expected requeue after %v, got: %v", ProvisioningRequeue, result.RequeueAfter)
 		}
-		if gpuRequest.Status.Phase != tgpv1.GPURequestPhaseProvisioning {
-			t.Errorf("Expected phase to be %s, got: %s", tgpv1.GPURequestPhaseProvisioning, gpuRequest.Status.Phase)
+		if gpuRequest.Status.Phase != tgpv1.GPURequestPhaseBooting {
+			t.Errorf("Expected phase to be %s, got: %s", tgpv1.GPURequestPhaseBooting, gpuRequest.Status.Phase)
 		}
 		if gpuRequest.Status.InstanceID == "" {
 			t.Error("Expected instance ID to be set")
