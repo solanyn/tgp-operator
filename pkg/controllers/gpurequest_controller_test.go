@@ -117,7 +117,7 @@ func TestGPURequestController_Reconcile(t *testing.T) {
 		Log:    zap.New(zap.UseDevMode(true)),
 		Scheme: scheme,
 		Providers: map[string]providers.ProviderClient{
-			"vast.ai": &mockProvider{name: "vast.ai"},
+			"runpod": &mockProvider{name: "runpod"},
 		},
 		PricingCache: pricing.NewCache(time.Minute * 5),
 	}
@@ -148,7 +148,7 @@ func TestGPURequestController_Reconcile(t *testing.T) {
 				Namespace: "default",
 			},
 			Spec: tgpv1.GPURequestSpec{
-				Provider: "vast.ai",
+				Provider: "runpod",
 				GPUType:  "RTX3090",
 				TalosConfig: tgpv1.TalosConfig{
 					Image: "factory.talos.dev/installer/test:v1.8.2",
@@ -207,7 +207,7 @@ func TestGPURequestController_Reconcile(t *testing.T) {
 				Finalizers: []string{FinalizerName},
 			},
 			Spec: tgpv1.GPURequestSpec{
-				Provider: "vast.ai",
+				Provider: "runpod",
 				GPUType:  "RTX3090",
 			},
 		}
@@ -248,7 +248,7 @@ func TestGPURequestController_Reconcile(t *testing.T) {
 			Log:    zap.New(zap.UseDevMode(true)),
 			Scheme: scheme,
 			Providers: map[string]providers.ProviderClient{
-				"vast.ai": &mockProvider{name: "vast.ai"}, // No termination error
+				"runpod": &mockProvider{name: "runpod"}, // No termination error
 			},
 			PricingCache: pricing.NewCache(time.Minute * 5),
 		}
@@ -260,7 +260,7 @@ func TestGPURequestController_Reconcile(t *testing.T) {
 				Finalizers: []string{FinalizerName},
 			},
 			Spec: tgpv1.GPURequestSpec{
-				Provider: "vast.ai",
+				Provider: "runpod",
 				GPUType:  "RTX3090",
 			},
 			Status: tgpv1.GPURequestStatus{
@@ -310,7 +310,7 @@ func TestGPURequestController_handlePending(t *testing.T) {
 		Log:    zap.New(zap.UseDevMode(true)),
 		Scheme: scheme,
 		Providers: map[string]providers.ProviderClient{
-			"vast.ai": &mockProvider{name: "vast.ai"},
+			"runpod": &mockProvider{name: "runpod"},
 		},
 		PricingCache: pricing.NewCache(time.Minute * 5),
 	}
@@ -361,7 +361,7 @@ func TestGPURequestController_handleProvisioning(t *testing.T) {
 	t.Run("should simulate provisioning and update to ready", func(t *testing.T) {
 		// Use a mock provider that returns Pending status initially
 		mockProv := &mockProvider{
-			name: "vast.ai",
+			name: "runpod",
 			instanceStatus: &providers.InstanceStatus{
 				State:     providers.InstanceStatePending,
 				Message:   "Instance is starting",
@@ -374,7 +374,7 @@ func TestGPURequestController_handleProvisioning(t *testing.T) {
 			Log:    zap.New(zap.UseDevMode(true)),
 			Scheme: scheme,
 			Providers: map[string]providers.ProviderClient{
-				"vast.ai": mockProv,
+				"runpod": mockProv,
 			},
 			PricingCache: pricing.NewCache(time.Minute * 5),
 		}
@@ -385,7 +385,7 @@ func TestGPURequestController_handleProvisioning(t *testing.T) {
 				Namespace: "default",
 			},
 			Spec: tgpv1.GPURequestSpec{
-				Provider: "vast.ai",
+				Provider: "runpod",
 				GPUType:  "RTX3090",
 			},
 			Status: tgpv1.GPURequestStatus{

@@ -135,7 +135,7 @@ func TestE2E(t *testing.T) {
 		Log:    zap.New(zap.UseDevMode(true)),
 		Scheme: mgr.GetScheme(),
 		Providers: map[string]providers.ProviderClient{
-			"vast.ai": &mockProvider{name: "vast.ai"},
+			"runpod": &mockProvider{name: "runpod"},
 		},
 		PricingCache: pricing.NewCache(time.Minute * 5),
 	}).SetupWithManager(mgr); err != nil {
@@ -164,7 +164,7 @@ func TestE2E(t *testing.T) {
 				Namespace: "default",
 			},
 			Spec: tgpv1.GPURequestSpec{
-				Provider: "vast.ai",
+				Provider: "runpod",
 				GPUType:  "RTX3090",
 				TalosConfig: tgpv1.TalosConfig{
 					Image: "factory.talos.dev/installer/test:v1.8.2",

@@ -8,7 +8,7 @@ tasks:
   crd:
     desc: Sync generated CRD to Helm chart
     cmds:
-      - task: dev:generate
+      - task: :dev:generate
       - cp config/crd/bases/tgp.io_gpurequests.yaml {{.CHART_DIR}}/templates/crd.yaml
 
   template:
