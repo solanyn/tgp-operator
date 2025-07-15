@@ -7,8 +7,9 @@ import (
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -25,7 +26,7 @@ const (
 // Requeue intervals for different scenarios
 const (
 	ProvisioningRequeue = 15 * time.Second // Quick requeue for new instances
-	RunningRequeue      = 2 * time.Minute  // Slower requeue for stable instances  
+	RunningRequeue      = 2 * time.Minute  // Slower requeue for stable instances
 	FailedRequeue       = 5 * time.Minute  // Backoff for failures
 	TerminatingRequeue  = 10 * time.Second // Quick requeue for termination
 )
@@ -100,7 +101,7 @@ func (r *GPURequestReconciler) handlePending(ctx context.Context, gpuRequest *tg
 	gpuRequest.Status.Phase = tgpv1.GPURequestPhaseProvisioning
 	gpuRequest.Status.Message = "Selecting provider and provisioning GPU instance"
 
-	if err := r.Status().Update(ctx, gpuRequest); err != nil {
+	if err := r.updateStatusWithRetry(ctx, gpuRequest, log); err != nil {
 		log.Error(err, "failed to update status to provisioning")
 		return ctrl.Result{}, err
 	}
@@ -136,7 +137,7 @@ func (r *GPURequestReconciler) handleProvisioning(ctx context.Context, gpuReques
 				log.Error(fmt.Errorf("unknown provider"), "provider not supported", "provider", gpuRequest.Spec.Provider)
 				gpuRequest.Status.Phase = tgpv1.GPURequestPhaseFailed
 				gpuRequest.Status.Message = fmt.Sprintf("Provider %s not supported", gpuRequest.Spec.Provider)
-				if err := r.Status().Update(ctx, gpuRequest); err != nil {
+				if err := r.updateStatusWithRetry(ctx, gpuRequest, log); err != nil {
 					log.Error(err, "failed to update status to failed")
 				}
 				return ctrl.Result{}, nil
@@ -179,7 +180,7 @@ func (r *GPURequestReconciler) handleProvisioning(ctx context.Context, gpuReques
 
 	if gpuRequest.Status.InstanceID == "" {
 		log.Info("launching instance", "provider", selectedProvider)
-		
+
 		// Convert spec to launch request
 		maxPrice := 0.0
 		if gpuRequest.Spec.MaxHourlyPrice != nil {
@@ -187,7 +188,7 @@ func (r *GPURequestReconciler) handleProvisioning(ctx context.Context, gpuReques
 				maxPrice = price
 			}
 		}
-		
+
 		launchReq := &providers.LaunchRequest{
 			GPUType:      gpuRequest.Spec.GPUType,
 			Region:       gpuRequest.Spec.Region,
@@ -196,13 +197,13 @@ func (r *GPURequestReconciler) handleProvisioning(ctx context.Context, gpuReques
 			MaxPrice:     maxPrice,
 			TalosConfig:  &gpuRequest.Spec.TalosConfig,
 		}
-		
+
 		instance, err := provider.LaunchInstance(ctx, launchReq)
 		if err != nil {
 			log.Error(err, "failed to launch instance")
 			gpuRequest.Status.Phase = tgpv1.GPURequestPhaseFailed
 			gpuRequest.Status.Message = fmt.Sprintf("Failed to launch instance: %v", err)
-			if updateErr := r.Status().Update(ctx, gpuRequest); updateErr != nil {
+			if updateErr := r.updateStatusWithRetry(ctx, gpuRequest, log); updateErr != nil {
 				log.Error(updateErr, "failed to update status to failed")
 			}
 			return ctrl.Result{RequeueAfter: time.Minute * 2}, nil
@@ -212,16 +213,16 @@ func (r *GPURequestReconciler) handleProvisioning(ctx context.Context, gpuReques
 		gpuRequest.Status.PublicIP = instance.PublicIP
 		gpuRequest.Status.PrivateIP = instance.PrivateIP
 		gpuRequest.Status.Message = "Instance launched, waiting for ready state"
-		
+
 		// Get and store pricing information
 		if pricing, err := provider.GetNormalizedPricing(ctx, gpuRequest.Spec.GPUType, gpuRequest.Spec.Region); err == nil {
 			gpuRequest.Status.SetHourlyPriceFloat(pricing.PricePerHour)
 		}
-		
+
 		// Update termination time if maxLifetime is set
 		gpuRequest.UpdateTerminationTime()
-		
-		if err := r.Status().Update(ctx, gpuRequest); err != nil {
+
+		if err := r.updateStatusWithRetry(ctx, gpuRequest, log); err != nil {
 			log.Error(err, "failed to update status with instance ID")
 			return ctrl.Result{}, err
 		}
@@ -236,7 +237,7 @@ func (r *GPURequestReconciler) handleProvisioning(ctx context.Context, gpuReques
 		}
 		gpuRequest.Status.Phase = tgpv1.GPURequestPhaseTerminating
 		gpuRequest.Status.Message = "Instance terminated due to maxLifetime"
-		if err := r.Status().Update(ctx, gpuRequest); err != nil {
+		if err := r.updateStatusWithRetry(ctx, gpuRequest, log); err != nil {
 			log.Error(err, "failed to update status to terminating")
 		}
 		return ctrl.Result{RequeueAfter: TerminatingRequeue}, nil
@@ -253,7 +254,7 @@ func (r *GPURequestReconciler) handleProvisioning(ctx context.Context, gpuReques
 		gpuRequest.Status.Phase = tgpv1.GPURequestPhaseReady
 		gpuRequest.Status.Message = "GPU instance is ready"
 		gpuRequest.Status.NodeName = fmt.Sprintf("gpu-node-%s", gpuRequest.Name)
-		if err := r.Status().Update(ctx, gpuRequest); err != nil {
+		if err := r.updateStatusWithRetry(ctx, gpuRequest, log); err != nil {
 			log.Error(err, "failed to update status to ready")
 			return ctrl.Result{}, err
 		}
@@ -261,14 +262,14 @@ func (r *GPURequestReconciler) handleProvisioning(ctx context.Context, gpuReques
 	case providers.InstanceStateFailed:
 		gpuRequest.Status.Phase = tgpv1.GPURequestPhaseFailed
 		gpuRequest.Status.Message = fmt.Sprintf("Instance failed: %s", status.Message)
-		if err := r.Status().Update(ctx, gpuRequest); err != nil {
+		if err := r.updateStatusWithRetry(ctx, gpuRequest, log); err != nil {
 			log.Error(err, "failed to update status to failed")
 		}
 		return ctrl.Result{RequeueAfter: FailedRequeue}, nil
 	default:
 		log.Info("waiting for instance to be ready", "state", status.State)
 		gpuRequest.Status.Message = fmt.Sprintf("Instance state: %s", status.State)
-		if err := r.Status().Update(ctx, gpuRequest); err != nil {
+		if err := r.updateStatusWithRetry(ctx, gpuRequest, log); err != nil {
 			log.Error(err, "failed to update status message")
 		}
 		return ctrl.Result{RequeueAfter: ProvisioningRequeue}, nil
@@ -289,22 +290,39 @@ func (r *GPURequestReconciler) handleRunning(ctx context.Context, gpuRequest *tg
 		}
 		gpuRequest.Status.Phase = tgpv1.GPURequestPhaseTerminating
 		gpuRequest.Status.Message = "Instance terminated due to maxLifetime"
-		if err := r.Status().Update(ctx, gpuRequest); err != nil {
+		if err := r.updateStatusWithRetry(ctx, gpuRequest, log); err != nil {
 			log.Error(err, "failed to update status to terminating")
 		}
 		return ctrl.Result{RequeueAfter: TerminatingRequeue}, nil
 	}
 
 	// TODO: Check for idle timeout by monitoring pod scheduling
-	// TODO: Monitor instance health
-	
+
 	// Update heartbeat
 	gpuRequest.Status.LastHeartbeat = &metav1.Time{Time: time.Now()}
-	if err := r.Status().Update(ctx, gpuRequest); err != nil {
+	if err := r.updateStatusWithRetry(ctx, gpuRequest, log); err != nil {
 		log.Error(err, "failed to update heartbeat")
+		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{RequeueAfter: RunningRequeue}, nil
+}
+
+// updateStatusWithRetry updates the GPURequest status with retry logic to handle resource conflicts
+func (r *GPURequestReconciler) updateStatusWithRetry(ctx context.Context, gpuRequest *tgpv1.GPURequest, log logr.Logger) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		// Fetch the latest version of the resource
+		latest := &tgpv1.GPURequest{}
+		if err := r.Get(ctx, client.ObjectKeyFromObject(gpuRequest), latest); err != nil {
+			return err
+		}
+
+		// Update the status fields on the latest version
+		latest.Status = gpuRequest.Status
+
+		// Attempt to update
+		return r.Status().Update(ctx, latest)
+	})
 }
 
 func (r *GPURequestReconciler) handleFailed(ctx context.Context, gpuRequest *tgpv1.GPURequest, log logr.Logger) (ctrl.Result, error) {
