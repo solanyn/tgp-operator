@@ -37,7 +37,11 @@ func (c *Cache) isExpired(entry *cacheEntry) bool {
 	return time.Since(entry.timestamp) > c.ttl
 }
 
-func (c *Cache) GetPricing(ctx context.Context, providerClients map[string]providers.ProviderClient, gpuType, region string) (map[string]*providers.NormalizedPricing, error) {
+func (c *Cache) GetPricing(
+	ctx context.Context,
+	providerClients map[string]providers.ProviderClient,
+	gpuType, region string,
+) (map[string]*providers.NormalizedPricing, error) {
 	key := c.getCacheKey(gpuType, region)
 
 	c.mutex.RLock()
@@ -74,7 +78,11 @@ func (c *Cache) GetPricing(ctx context.Context, providerClients map[string]provi
 	return pricing, nil
 }
 
-func (c *Cache) GetBestPrice(ctx context.Context, providerClients map[string]providers.ProviderClient, gpuType, region string) (*providers.NormalizedPricing, error) {
+func (c *Cache) GetBestPrice(
+	ctx context.Context,
+	providerClients map[string]providers.ProviderClient,
+	gpuType, region string,
+) (*providers.NormalizedPricing, error) {
 	pricing, err := c.GetPricing(ctx, providerClients, gpuType, region)
 	if err != nil {
 		return nil, err
@@ -97,7 +105,11 @@ func (c *Cache) GetBestPrice(ctx context.Context, providerClients map[string]pro
 	return bestPrice, nil
 }
 
-func (c *Cache) GetSortedPricing(ctx context.Context, providerClients map[string]providers.ProviderClient, gpuType, region string) ([]*providers.NormalizedPricing, error) {
+func (c *Cache) GetSortedPricing(
+	ctx context.Context,
+	providerClients map[string]providers.ProviderClient,
+	gpuType, region string,
+) ([]*providers.NormalizedPricing, error) {
 	pricing, err := c.GetPricing(ctx, providerClients, gpuType, region)
 	if err != nil {
 		return nil, err

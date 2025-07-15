@@ -1,3 +1,4 @@
+// Package paperspace provides Paperspace cloud GPU provider implementation for the TGP operator
 package paperspace
 
 import (
@@ -38,7 +39,7 @@ func (c *Client) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFi
 	return []providers.GPUOffer{}, nil
 }
 
-func (c *Client) ListOffers(ctx context.Context, gpuType string, region string) ([]providers.GPUOffer, error) {
+func (c *Client) ListOffers(ctx context.Context, gpuType, region string) ([]providers.GPUOffer, error) {
 	return []providers.GPUOffer{
 		{
 			ID:          "paperspace-offer-123",
@@ -74,7 +75,7 @@ func (c *Client) TerminateInstance(ctx context.Context, instanceID string) error
 	return nil
 }
 
-func (c *Client) GetNormalizedPricing(ctx context.Context, gpuType string, region string) (*providers.NormalizedPricing, error) {
+func (c *Client) GetNormalizedPricing(ctx context.Context, gpuType, region string) (*providers.NormalizedPricing, error) {
 	return &providers.NormalizedPricing{
 		PricePerSecond: 0.51 / 3600,
 		PricePerHour:   0.51,

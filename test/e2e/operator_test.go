@@ -189,7 +189,13 @@ func TestOperatorE2E(t *testing.T) {
 	})
 }
 
-func waitForCondition(t *testing.T, client client.Client, obj *tgpv1.GPURequest, timeout time.Duration, condition func(*tgpv1.GPURequest) bool) bool {
+func waitForCondition(
+	t *testing.T,
+	client client.Client,
+	obj *tgpv1.GPURequest,
+	timeout time.Duration,
+	condition func(*tgpv1.GPURequest) bool,
+) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 

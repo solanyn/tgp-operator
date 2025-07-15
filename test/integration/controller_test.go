@@ -67,7 +67,7 @@ func (m *mockProvider) LaunchInstance(ctx context.Context, req *providers.Launch
 
 func (m *mockProvider) GetInstanceStatus(ctx context.Context, instanceID string) (*providers.InstanceStatus, error) {
 	m.statusCalls++
-	
+
 	// Simulate provisioning time - first few calls return pending, then running
 	if m.statusCalls <= 2 || time.Since(m.instanceTime) < 2*time.Second {
 		return &providers.InstanceStatus{
@@ -76,7 +76,7 @@ func (m *mockProvider) GetInstanceStatus(ctx context.Context, instanceID string)
 			UpdatedAt: time.Now(),
 		}, nil
 	}
-	
+
 	return &providers.InstanceStatus{
 		State:     providers.InstanceStateRunning,
 		Message:   "Instance is running",
@@ -229,7 +229,13 @@ func TestE2E(t *testing.T) {
 	})
 }
 
-func waitForCondition(t *testing.T, client client.Client, obj *tgpv1.GPURequest, timeout time.Duration, condition func(*tgpv1.GPURequest) bool) bool {
+func waitForCondition(
+	t *testing.T,
+	client client.Client,
+	obj *tgpv1.GPURequest,
+	timeout time.Duration,
+	condition func(*tgpv1.GPURequest) bool,
+) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
