@@ -2,12 +2,63 @@ version: '3'
 
 tasks:
 
-  generate:
-    desc: Generate code (deepcopy methods, CRDs, etc.)
+  install-codegen:
+    desc: Install code generation tools
     cmds:
-      - go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
-      - $(go env GOPATH)/bin/controller-gen object paths="./pkg/api/..."
-      - $(go env GOPATH)/bin/controller-gen crd paths="./pkg/api/..." output:crd:artifacts:config=config/crd/bases
+      - mise exec -- go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
+      - mise exec -- go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
+      - mise exec -- go install github.com/Khan/genqlient@latest
+    status:
+      - test -f bin/oapi-codegen
+      - test -f bin/genqlient
+
+  generate-providers:
+    desc: Generate provider API clients from OpenAPI/GraphQL specs
+    deps: [install-codegen]
+    cmds:
+      - task: generate-lambda-client
+      - task: generate-paperspace-client
+      - task: generate-runpod-client
+
+  generate-lambda-client:
+    desc: Generate Lambda Labs client from OpenAPI spec
+    deps: [install-codegen]
+    cmds:
+      - bin/oapi-codegen -generate "types,client" -package "lambdalabs" -o pkg/providers/lambdalabs/generated.go https://cloud.lambda.ai/api/v1/openapi.json
+    sources:
+      - https://cloud.lambda.ai/api/v1/openapi.json
+    generates:
+      - pkg/providers/lambdalabs/generated.go
+
+  generate-paperspace-client:
+    desc: Generate Paperspace client from OpenAPI spec
+    deps: [install-codegen]
+    cmds:
+      - bin/oapi-codegen -generate "types,client" -package "paperspace" -o pkg/providers/paperspace/generated.go https://api.paperspace.com/v1/openapi.json
+    sources:
+      - https://api.paperspace.com/v1/openapi.json
+    generates:
+      - pkg/providers/paperspace/generated.go
+
+  generate-runpod-client:
+    desc: Generate RunPod GraphQL client
+    deps: [install-codegen]
+    cmds:
+      - cd pkg/providers/runpod && ../../../bin/genqlient
+    sources:
+      - pkg/providers/runpod/genqlient.yaml
+      - pkg/providers/runpod/queries.graphql
+      - pkg/providers/runpod/schema.graphql
+    generates:
+      - pkg/providers/runpod/generated.go
+
+  generate:
+    desc: Generate code (deepcopy methods, CRDs, and provider clients)
+    deps: [install-codegen]
+    cmds:
+      - bin/controller-gen object paths="./pkg/api/..."
+      - bin/controller-gen crd paths="./pkg/api/..." output:crd:artifacts:config=config/crd/bases
+      - task: generate-providers
 
   build:
     desc: Build the manager binary

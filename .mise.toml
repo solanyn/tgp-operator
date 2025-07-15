@@ -1,0 +1,9 @@
+[tools]
+golang = "1.24.4"
+task = "3.35.1"
+kubectl = "1.28.0"
+helm = "3.14.0"
+
+[env]
+GOBIN = "{{config_root}}/bin"
+KUBEBUILDER_ASSETS = "{{config_root}}/bin/k8s"
