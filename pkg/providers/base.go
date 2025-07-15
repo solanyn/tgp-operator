@@ -4,6 +4,7 @@ package providers
 import (
 	"context"
 	"fmt"
+	"net"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -125,4 +126,137 @@ func (n *PricingNormalizer) Normalize(providerPrice float64, currency string) *N
 		BillingModel:   n.billingModel,
 		LastUpdated:    time.Now(),
 	}
+}
+
+// RetryConfig defines retry behavior for provider operations
+type RetryConfig struct {
+	MaxRetries      int
+	InitialDelay    time.Duration
+	MaxDelay        time.Duration
+	BackoffFactor   float64
+	RetriableErrors []RetriableErrorType
+}
+
+// RetriableErrorType defines types of errors that should be retried
+type RetriableErrorType int
+
+const (
+	RetriableErrorRateLimit RetriableErrorType = iota
+	RetriableErrorNetwork
+	RetriableErrorTemporary
+	RetriableErrorServerError
+)
+
+// DefaultRetryConfig returns sensible retry defaults for providers
+func DefaultRetryConfig() *RetryConfig {
+	return &RetryConfig{
+		MaxRetries:    3,
+		InitialDelay:  time.Second,
+		MaxDelay:      time.Minute,
+		BackoffFactor: 2.0,
+		RetriableErrors: []RetriableErrorType{
+			RetriableErrorRateLimit,
+			RetriableErrorNetwork,
+			RetriableErrorTemporary,
+			RetriableErrorServerError,
+		},
+	}
+}
+
+// IsRetriableError determines if an error should be retried
+func IsRetriableError(err error) (bool, RetriableErrorType) {
+	if err == nil {
+		return false, 0
+	}
+
+	// Network errors
+	if netErr, ok := err.(net.Error); ok {
+		if netErr.Timeout() || netErr.Temporary() {
+			return true, RetriableErrorNetwork
+		}
+	}
+
+	// Note: HTTP response checking would need custom error types
+	// For now, rely on error message patterns below
+
+	// Check error message for known patterns
+	errMsg := err.Error()
+	if containsAny(errMsg, []string{"rate limit", "too many requests", "throttled"}) {
+		return true, RetriableErrorRateLimit
+	}
+	if containsAny(errMsg, []string{"timeout", "connection", "network"}) {
+		return true, RetriableErrorNetwork
+	}
+	if containsAny(errMsg, []string{"temporary", "unavailable", "try again"}) {
+		return true, RetriableErrorTemporary
+	}
+
+	return false, 0
+}
+
+// RetryWithBackoff executes a function with exponential backoff retry logic
+func RetryWithBackoff(ctx context.Context, config *RetryConfig, operation func() error) error {
+	var lastErr error
+	delay := config.InitialDelay
+
+	for attempt := 0; attempt <= config.MaxRetries; attempt++ {
+		// First attempt doesn't wait
+		if attempt > 0 {
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+
+		lastErr = operation()
+		if lastErr == nil {
+			return nil // Success
+		}
+
+		// Check if we should retry this error
+		shouldRetry, errorType := IsRetriableError(lastErr)
+		if !shouldRetry {
+			return lastErr // Non-retriable error
+		}
+
+		// Check if this error type is configured to be retried
+		retriable := false
+		for _, retryType := range config.RetriableErrors {
+			if retryType == errorType {
+				retriable = true
+				break
+			}
+		}
+		if !retriable {
+			return lastErr
+		}
+
+		// Don't retry on the last attempt
+		if attempt == config.MaxRetries {
+			break
+		}
+
+		// Calculate next delay with exponential backoff
+		delay = time.Duration(float64(delay) * config.BackoffFactor)
+		if delay > config.MaxDelay {
+			delay = config.MaxDelay
+		}
+	}
+
+	return lastErr
+}
+
+// containsAny checks if a string contains any of the given substrings
+func containsAny(s string, substrings []string) bool {
+	for _, substr := range substrings {
+		if len(s) >= len(substr) {
+			for i := 0; i <= len(s)-len(substr); i++ {
+				if s[i:i+len(substr)] == substr {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
