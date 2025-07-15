@@ -6,14 +6,14 @@ Addresses intermittent GPU compute needs by provisioning instances on-demand fro
 
 ## Features
 
-- **Multi-cloud support** - Vast.ai, RunPod, Lambda Labs, Paperspace
+- **Multi-cloud support** - RunPod, Lambda Labs, Paperspace with real API integration
 - **Cost optimization** - Automatic provider selection based on real-time pricing
-- **Talos integration** - Immutable node provisioning with secure networking
-- **WireGuard connectivity** - Encrypted networking between cloud instances and cluster
+- **Secure credentials** - 1Password CLI integration for secret management
 - **Lifecycle management** - Automated provisioning, configuration, and cleanup
 - **Pay-per-use model** - Resources exist only when actively needed
 - **Production monitoring** - Prometheus metrics for cost tracking and operational visibility
-- **Provider validation** - Credential verification and API connectivity testing
+- **Provider validation** - Real API credential verification and connectivity testing
+- **Interactive testing** - CLI tool for testing provider APIs and pricing
 
 ## Quick Start
 
@@ -25,8 +25,21 @@ Addresses intermittent GPU compute needs by provisioning instances on-demand fro
 
 ### Installation
 
+#### Option 1: Helm Chart Repository (Recommended)
 ```bash
-# Install via Helm chart
+# Add the repository
+helm repo add tgp-operator https://solanyn.github.io/tgp-operator/
+helm repo update
+
+# Install the operator
+helm install tgp-operator tgp-operator/tgp-operator \
+  --namespace tgp-system \
+  --create-namespace
+```
+
+#### Option 2: OCI Registry
+```bash
+# Install directly from OCI registry
 helm install tgp-operator oci://ghcr.io/solanyn/charts/tgp-operator \
   --version 0.1.0 \
   --namespace tgp-system \
@@ -38,8 +51,7 @@ helm install tgp-operator oci://ghcr.io/solanyn/charts/tgp-operator \
 Create provider credentials:
 
 ```bash
-kubectl create secret generic tgp-provider-secrets \
-  --from-literal=VAST_API_KEY=your-vast-key \
+kubectl create secret generic tgp-secret \
   --from-literal=RUNPOD_API_KEY=your-runpod-key \
   --from-literal=LAMBDA_LABS_API_KEY=your-lambda-key \
   --from-literal=PAPERSPACE_API_KEY=your-paperspace-key \
@@ -48,24 +60,39 @@ kubectl create secret generic tgp-provider-secrets \
 
 ### Usage
 
+#### Basic GPU Request
 ```yaml
-apiVersion: tgp.io/v1
+apiVersion: tgp.solanyn.com/v1
 kind: GPURequest
 metadata:
   name: my-gpu-workload
 spec:
-  provider: "vast.ai"
   gpuType: "RTX4090"
-  region: "us-east"
-  maxHourlyPrice: "2.00"
-  talosConfig:
-    image: "ghcr.io/siderolabs/talos:v1.8.0"
-    wireGuardConfig:
-      privateKey: "your-private-key"
-      publicKey: "your-public-key"
-      serverEndpoint: "your-cluster-endpoint:51820"
-      allowedIPs: ["10.244.0.0/16"]
-      address: "10.5.0.10/24"
+  region: "us-west"
+  maxPrice: 2.0
+```
+
+#### Check Status
+```bash
+# Check GPU request status
+kubectl get gpurequest my-gpu-workload -o yaml
+
+# Monitor operator logs
+kubectl logs -n tgp-system deployment/tgp-operator-controller-manager -f
+
+# Check available providers
+kubectl get pods -n tgp-system
+```
+
+#### Provider Testing
+```bash
+# Test provider APIs locally (requires 1Password CLI)
+task test:provider -- -provider=runpod -action=list
+task test:provider -- -provider=lambdalabs -action=pricing -gpu-type=A100
+task test:provider -- -provider=paperspace -action=info
+
+# Test all providers
+task test:providers
 ```
 
 ## Architecture
