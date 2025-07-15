@@ -5,54 +5,53 @@ on:
     branches: [ main ]
 
 jobs:
-  lint-and-test:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    
-    - uses: DeterminateSystems/nix-installer-action@main
-    
-    - uses: DeterminateSystems/magic-nix-cache-action@main
-    
-    - name: Setup development environment
-      run: |
-        nix develop --command task setup
-    
-    - name: Run linting and formatting checks
-      run: |
-        nix develop --command task lint:all
-    
-    - name: Run tests
-      run: |
-        nix develop --command task test:all
-    
-    - name: Build operator
-      run: |
-        nix develop --command task dev:build
-    
-    - name: Validate Helm chart
-      run: |
-        nix develop --command task chart:validate
-    
-    - name: Upload test results
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-results
-        path: |
-          cover.out
-          test-results.xml
-        retention-days: 3
+  lint:
+    name: Lint
+    uses: ./.github/workflows/lint.yml
+    permissions:
+      contents: read
+      pull-requests: write
+
+  test-go:
+    name: Go Tests
+    uses: ./.github/workflows/test-go.yml
+    permissions:
+      contents: read
+
+  test-e2e:
+    name: E2E Tests
+    needs: [lint, test-go]
+    uses: ./.github/workflows/test-e2e.yml
+    permissions:
+      contents: read
 
   security:
+    name: Security Scan
+    uses: ./.github/workflows/security-scan.yml
+    permissions:
+      contents: read
+      security-events: write
+
+  build:
+    name: Build Images
+    needs: [lint, test-go]
+    uses: ./.github/workflows/build-and-push-images.yml
+    with:
+      push: false
+    permissions:
+      contents: read
+      packages: write
+
+  pr-status:
+    name: PR Status Check
     runs-on: ubuntu-latest
+    needs: [lint, test-go, test-e2e, security, build]
+    if: always()
     steps:
-    - uses: actions/checkout@v4
-    
-    - uses: DeterminateSystems/nix-installer-action@main
-    
-    - uses: DeterminateSystems/magic-nix-cache-action@main
-    
-    - name: Run security checks
+    - name: Check all job statuses
       run: |
-        nix develop --command golangci-lint run --enable gosec ./...
+        if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
+          echo "One or more jobs failed"
+          exit 1
+        fi
+        echo "All checks passed!"
