@@ -1,3 +1,4 @@
+// Package vast provides Vast.ai cloud GPU provider implementation for the TGP operator
 package vast
 
 import (
