@@ -8,7 +8,6 @@ tasks:
       - task: yaml
       - task: markdown
       - task: shell
-      - task: nix
       - task: github-actions
 
   go:
@@ -50,15 +49,6 @@ tasks:
     cmds:
       - find . -name "*.sh" -exec shfmt -w {} +
 
-  nix:
-    desc: Format Nix files
-    cmds:
-      - nixpkgs-fmt --check .
-
-  nix-fix:
-    desc: Fix Nix formatting
-    cmds:
-      - nixpkgs-fmt .
 
   github-actions:
     desc: Lint GitHub Actions workflows
@@ -71,5 +61,4 @@ tasks:
       - task: go-fix
       - task: yaml-fix
       - task: shell-fix
-      - task: nix-fix
       - echo "All formatting applied! Review changes before committing."

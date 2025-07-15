@@ -69,9 +69,14 @@ tasks:
   e2e:
     desc: Run true e2e tests against real cloud providers
     cmds:
-      - echo "WARNING This will provision real GPU instances and incur costs"
+      - echo "WARNING: This will provision real GPU instances and incur costs"
       - echo "Requires cloud provider credentials and will bill your account"
-      - echo "Set TGP_REAL_E2E=true to proceed"
+      - echo ""
+      - echo "Setup: Export provider API keys as environment variables:"
+      - echo "  export VAST_API_KEY=..."
+      - echo "  export RUNPOD_API_KEY=..."
+      - echo "  export TGP_REAL_E2E=true"
+      - echo ""
       - |
         if [ "$TGP_REAL_E2E" = "true" ]; then
           echo "Running e2e tests against real cloud providers..."

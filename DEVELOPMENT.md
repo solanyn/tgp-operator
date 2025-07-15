@@ -57,8 +57,23 @@ task setup
 
 ## Task Commands
 
+The task runner is aligned with our CI/CD workflows for consistency between local development and GitHub Actions.
+
+### Quick Commands
+- `task help` - Show common development workflows
+- `task build` - Build the operator binary
+- `task test` - Run all tests (unit + integration)
+- `task lint` - Run all linters
+- `task lint:fix` - Auto-fix all formatting issues
+- `task check` - Quick pre-commit check (lint + unit tests)
+- `task fix` - Quick fix for common issues
+
+### CI Simulation
+- `task ci:local` - Run full CI suite locally (matches GitHub Actions)
+- `task ci:pr` - Run PR checks before pushing
+
 ### Development
-- `task setup` - Complete development environment setup (git hooks + test env)
+- `task setup` - Complete development environment setup
 - `task dev:build` - Build manager binary
 - `task dev:generate` - Generate Go code (deepcopy methods)
 - `task dev:clean` - Clean build artifacts
@@ -76,10 +91,19 @@ task setup
 - `task lint:yaml` - YAML linting and formatting
 - `task lint:markdown` - Markdown linting
 
+### Security
+- `task security` - Run all security scans
+- `task security:gosec` - Go security scanner
+- `task security:trivy-code` - Scan code for vulnerabilities
+- `task security:trivy-container` - Scan container for vulnerabilities
+- `task security:dependencies` - Check for vulnerable dependencies
+- `task security:licenses` - Check dependency licenses
+
 ### Container & Deployment
 - `task docker:build` - Build rootless container image
 - `task docker:push` - Push container to registry
-- `task docker:push-release` - Push with semantic version tags
+- `task deploy:local` - Deploy to local Talos cluster
+- `task deploy:talos` - Deploy to existing Talos cluster
 - `task chart:template` - Generate Helm templates
 - `task chart:validate` - Validate Helm chart and manifests
 - `task chart:push-oci` - Push chart as OCI artifact to GHCR
@@ -89,10 +113,6 @@ task setup
 - `task release:preview-changelog` - Preview changelog for next release
 - `task release:release` - Create full automated release
 - `task release:auto-release` - Trigger GitHub Actions release workflow
-
-### Workflows
-- `task ci` - Full CI workflow (deps, build, test, lint)
-- `task deploy` - Build container and generate chart
 
 ## Testing Strategy
 
@@ -163,15 +183,55 @@ The operator consists of:
 
 ## CI/CD Workflows
 
-### PR Checks
-- Runs on all pull requests
-- Full linting, testing, chart validation
-- Security scanning
+Our CI/CD pipeline is structured into modular workflows that mirror local development tasks.
 
-### Main Branch
-- Runs on pushes to main
-- Auto-detects if release needed
-- Shows preview of what would be released
+### Workflow Structure
+
+1. **lint.yml** - All code quality checks
+   - Go linting (golangci-lint)
+   - Go formatting (gofumpt, goimports)
+   - YAML linting
+   - Markdown linting
+   - Helm chart linting
+   - GitHub Actions linting
+
+2. **test-go.yml** - Go-specific testing
+   - Unit tests with coverage
+   - Integration tests with envtest
+
+3. **test-e2e.yml** - End-to-end testing
+   - Mock provider tests with Docker-based Talos
+   - Real provider tests (main branch only, requires secrets)
+
+4. **security-scan.yml** - Security analysis
+   - Go security scanning (gosec)
+   - Code vulnerability scanning (Trivy)
+   - Container scanning
+   - Dependency vulnerability checks
+   - License compliance
+
+5. **build-and-push-images.yml** - Container management
+   - Multi-platform builds (amd64, arm64)
+   - Push to GitHub Container Registry
+
+6. **ci.yml** - PR orchestrator
+   - Runs all checks in parallel where possible
+   - Ensures all tests pass before merge
+
+7. **main.yml** - Main branch workflow
+   - Runs full test suite
+   - Builds and pushes images
+   - Checks for pending releases
+
+### Local/CI Parity
+
+Tasks are designed to match CI workflows:
+- `task lint` = lint.yml
+- `task test` = test-go.yml
+- `task test:e2e` = test-e2e.yml  
+- `task security` = security-scan.yml
+- `task docker:build` = build-and-push-images.yml
+- `task ci:local` = ci.yml behavior
 
 ### Dependency Management
 - Renovate automatically updates dependencies
