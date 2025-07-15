@@ -81,6 +81,7 @@ The task runner is aligned with our CI/CD workflows for consistency between loca
 ### Testing
 - `task test:unit` - Run unit tests
 - `task test:integration` - Run all integration tests (envtest + Talos Docker)
+- `task test:validate-providers` - Validate cloud provider credentials (no instance launches)
 - `task test:e2e` - Run true e2e tests against real cloud providers
 - `task test:all` - Run all safe tests (unit + integration)
 
@@ -114,10 +115,48 @@ The task runner is aligned with our CI/CD workflows for consistency between loca
 - `task release:release` - Create full automated release
 - `task release:auto-release` - Trigger GitHub Actions release workflow
 
+## Observability
+
+The operator exposes Prometheus metrics on `:8080/metrics` for production monitoring:
+
+### Key Metrics
+- `tgp_operator_gpu_requests_total` - GPU request counts by provider/type/phase
+- `tgp_operator_instance_launch_duration_seconds` - Instance launch times  
+- `tgp_operator_instances_active` - Current active instances
+- `tgp_operator_instance_hourly_cost_usd` - Cost tracking per instance
+- `tgp_operator_provider_requests_total` - Provider API success/error rates
+- `tgp_operator_health_checks_total` - Instance health monitoring
+- `tgp_operator_idle_timeouts_total` - Cost optimization effectiveness
+
+### Accessing Metrics
+```bash
+# Port forward to local development
+kubectl port-forward -n tgp-system deployment/tgp-operator 8080:8080
+
+# View metrics
+curl http://localhost:8080/metrics | grep tgp_operator
+```
+
+## Provider Validation
+
+Validate cloud provider credentials before deployment:
+
+```bash
+# Export API keys
+export VAST_API_KEY=your_vast_key
+export RUNPOD_API_KEY=your_runpod_key  
+export LAMBDA_LABS_API_KEY=your_lambda_key
+export PAPERSPACE_API_KEY=your_paperspace_key
+
+# Validate connectivity (no instance launches)
+task test:validate-providers
+```
+
 ## Testing Strategy
 
 - **Unit tests** - Test individual components with mocks
 - **Integration tests** - Test controller logic (envtest) + operator workflow (Docker Talos + mocked providers)
+- **Provider validation** - Test real API connectivity without launching instances
 - **E2E tests** - Test against real cloud providers (cost involved, requires credentials)
 
 ## Releases
