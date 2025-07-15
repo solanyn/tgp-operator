@@ -20,7 +20,6 @@ import (
 	"github.com/solanyn/tgp-operator/pkg/providers/lambdalabs"
 	"github.com/solanyn/tgp-operator/pkg/providers/paperspace"
 	"github.com/solanyn/tgp-operator/pkg/providers/runpod"
-	"github.com/solanyn/tgp-operator/pkg/providers/vast"
 )
 
 var (
@@ -69,7 +68,6 @@ func main() {
 	}
 
 	providers := map[string]providers.ProviderClient{
-		"vast.ai":     vast.NewClient(os.Getenv("VAST_API_KEY")),
 		"runpod":      runpod.NewClient(os.Getenv("RUNPOD_API_KEY")),
 		"lambda-labs": lambdalabs.NewClient(os.Getenv("LAMBDA_LABS_API_KEY")),
 		"paperspace":  paperspace.NewClient(os.Getenv("PAPERSPACE_API_KEY")),

@@ -1,0 +1,118 @@
+type Query {
+  gpuTypes: [GpuType!]!
+  pod(input: PodInput!): Pod
+  myself: User
+}
+
+type Mutation {
+  podRentInterruptable(input: PodRentInterruptableInput!): Pod
+  podFindAndDeployOnDemand(input: PodFindAndDeployOnDemandInput!): Pod
+  podTerminate(input: PodTerminateInput!): Pod
+  podStop(input: PodStopInput!): Pod
+  podResume(input: PodResumeInput!): Pod
+}
+
+type GpuType {
+  id: String!
+  displayName: String!
+  memoryInGb: Int!
+  secureSpotPrice: Float
+  communitySpotPrice: Float
+  securePrice: Float!
+  communityPrice: Float!
+  maxQuantity: Int!
+  lowestPrice(input: LowestPriceInput!): LowestPrice
+}
+
+type LowestPrice {
+  minimumBidPrice: Float!
+  uninterruptablePrice: Float!
+}
+
+type Pod {
+  id: String!
+  name: String
+  status: String!
+  costPerHr: String
+  runtime: Runtime
+  machine: Machine
+}
+
+type Runtime {
+  ports: [Port!]
+}
+
+type Port {
+  privatePort: Int!
+  publicPort: Int!
+  type: String!
+}
+
+type Machine {
+  podHostId: String!
+  gpuCount: Int!
+  gpuDisplayName: String!
+  memoryInGb: Int!
+  diskInGb: Int!
+}
+
+type User {
+  pods: [Pod!]!
+}
+
+input PodInput {
+  podId: String!
+}
+
+input LowestPriceInput {
+  gpuCount: Int!
+}
+
+input PodRentInterruptableInput {
+  cloudType: String!
+  gpuCount: Int!
+  volumeInGb: Int!
+  containerDiskInGb: Int!
+  minVcpuCount: Int!
+  minMemoryInGb: Int!
+  gpuTypeId: String!
+  name: String!
+  imageName: String!
+  ports: String
+  volumeMountPath: String
+  env: [EnvVar!]
+  allowedCudaVersions: [String!]
+}
+
+input PodFindAndDeployOnDemandInput {
+  cloudType: String!
+  gpuCount: Int!
+  volumeInGb: Int!
+  containerDiskInGb: Int!
+  minVcpuCount: Int!
+  minMemoryInGb: Int!
+  gpuTypeId: String!
+  name: String!
+  imageName: String!
+  ports: String
+  volumeMountPath: String
+  env: [EnvVar!]
+  allowedCudaVersions: [String!]
+}
+
+input PodTerminateInput {
+  podId: String!
+}
+
+input PodStopInput {
+  podId: String!
+}
+
+input PodResumeInput {
+  podId: String!
+}
+
+input EnvVar {
+  name: String!
+  value: String!
+}

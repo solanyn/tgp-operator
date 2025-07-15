@@ -1,0 +1,100 @@
+# Query to list available GPU types
+query ListGPUTypes {
+  gpuTypes {
+    id
+    displayName
+    memoryInGb
+    secureSpotPrice
+    communitySpotPrice
+    securePrice
+    communityPrice
+    lowestPrice(input: {gpuCount: 1}) {
+      minimumBidPrice
+      uninterruptablePrice
+    }
+  }
+}
+
+# Query to get pod status
+query GetPod($podId: String!) {
+  pod(input: {podId: $podId}) {
+    id
+    name
+    status
+    costPerHr
+    runtime {
+      ports {
+        privatePort
+        publicPort
+        type
+      }
+    }
+    machine {
+      podHostId
+      gpuCount
+      gpuDisplayName
+      memoryInGb
+      diskInGb
+    }
+  }
+}
+
+# Query to list user's pods
+query ListPods {
+  myself {
+    pods {
+      id
+      name
+      status
+      costPerHr
+      runtime {
+        ports {
+          privatePort
+          publicPort
+          type
+        }
+      }
+      machine {
+        podHostId
+        gpuCount
+        gpuDisplayName
+        memoryInGb
+        diskInGb
+      }
+    }
+  }
+}
+
+# Mutation to rent a spot instance
+mutation RentSpotInstance(
+  $input: PodRentInterruptableInput!
+) {
+  podRentInterruptable(input: $input) {
+    id
+    status
+    costPerHr
+    machine {
+      podHostId
+      gpuCount
+      gpuDisplayName
+      memoryInGb
+      diskInGb
+    }
+  }
+}
+
+# Mutation to terminate a pod
+mutation TerminatePod($input: PodTerminateInput!) {
+  podTerminate(input: $input) {
+    id
+    status
+  }
+}
+
+# Mutation to stop a pod
+mutation StopPod($input: PodStopInput!) {
+  podStop(input: $input) {
+    id
+    status
+  }
+}

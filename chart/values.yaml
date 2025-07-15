@@ -26,9 +26,6 @@ rbac:
   create: true
 
 providers:
-  vastai:
-    secretName: tgp-secret
-    secretKey: VAST_API_KEY
   runpod:
     secretName: tgp-secret
     secretKey: RUNPOD_API_KEY
