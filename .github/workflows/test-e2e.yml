@@ -1,0 +1,116 @@
+name: E2E Tests
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+  workflow_call:
+
+jobs:
+  e2e-docker-talos:
+    name: E2E Tests with Docker-based Talos
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: 'go.mod'
+        cache: true
+    
+    - name: Install talosctl
+      run: |
+        curl -sL https://talos.dev/install | sh
+    
+    - name: Create Talos cluster
+      run: |
+        talosctl cluster create --provisioner docker --name e2e-test --wait
+    
+    - name: Build operator image
+      run: |
+        docker build -t tgp-operator:e2e-test .
+        talosctl cluster load-image tgp-operator:e2e-test --name e2e-test
+    
+    - name: Install CRDs
+      run: |
+        kubectl apply -f config/crd/bases/
+    
+    - name: Deploy operator with mock providers
+      run: |
+        # Create deployment with mock provider config
+        kubectl create namespace tgp-system
+        kubectl apply -f test/e2e/mock-provider-deployment.yaml
+    
+    - name: Run E2E tests
+      run: |
+        go test -v -timeout 20m ./test/e2e/... -ginkgo.v
+    
+    - name: Collect logs on failure
+      if: failure()
+      run: |
+        echo "=== Operator Logs ==="
+        kubectl logs -n tgp-system -l app=tgp-operator --tail=100
+        echo "=== Events ==="
+        kubectl get events -A --sort-by='.lastTimestamp' | tail -50
+        echo "=== GPURequests ==="
+        kubectl get gpurequests -A -o yaml
+    
+    - name: Cleanup
+      if: always()
+      run: |
+        talosctl cluster destroy --name e2e-test
+
+  e2e-real-providers:
+    name: E2E Tests with Real Providers
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+    - uses: actions/checkout@v4
+    
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: 'go.mod'
+        cache: true
+    
+    - name: Install talosctl
+      run: |
+        curl -sL https://talos.dev/install | sh
+    
+    - name: Create Talos cluster
+      run: |
+        talosctl cluster create --provisioner docker --name e2e-real --wait
+    
+    - name: Build and load operator image
+      run: |
+        docker build -t tgp-operator:e2e-test .
+        talosctl cluster load-image tgp-operator:e2e-test --name e2e-real
+    
+    - name: Deploy operator with real provider config
+      run: |
+        kubectl apply -f config/crd/bases/
+        kubectl create namespace tgp-system
+        
+        # Create secrets for providers (from GitHub secrets)
+        kubectl create secret generic provider-secrets \
+          --from-literal=vast-api-key="${{ secrets.VAST_API_KEY }}" \
+          --from-literal=runpod-api-key="${{ secrets.RUNPOD_API_KEY }}" \
+          --from-literal=lambdalabs-api-key="${{ secrets.LAMBDALABS_API_KEY }}" \
+          --from-literal=paperspace-api-key="${{ secrets.PAPERSPACE_API_KEY }}" \
+          -n tgp-system
+        
+        kubectl apply -f test/e2e/real-provider-deployment.yaml
+    
+    - name: Run real provider E2E tests
+      run: |
+        go test -v -timeout 30m ./test/e2e/... -ginkgo.v -ginkgo.label-filter="real-providers" -tags=real
+      env:
+        TGP_REAL_E2E: "true"
+    
+    - name: Cleanup
+      if: always()
+      run: |
+        # Ensure all GPU instances are terminated
+        kubectl delete gpurequests --all -A
+        sleep 30
+        talosctl cluster destroy --name e2e-real
