@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -100,6 +101,7 @@ func (r *GPURequestReconciler) handlePending(ctx context.Context, gpuRequest *tg
 	// Update status to provisioning
 	gpuRequest.Status.Phase = tgpv1.GPURequestPhaseProvisioning
 	gpuRequest.Status.Message = "Selecting provider and provisioning GPU instance"
+	r.updateCondition(gpuRequest, "ProvisioningStarted", metav1.ConditionTrue, "ProvisioningInitiated", "GPU instance provisioning initiated")
 
 	if err := r.updateStatusWithRetry(ctx, gpuRequest, log); err != nil {
 		log.Error(err, "failed to update status to provisioning")
@@ -203,6 +205,7 @@ func (r *GPURequestReconciler) handleProvisioning(ctx context.Context, gpuReques
 			log.Error(err, "failed to launch instance")
 			gpuRequest.Status.Phase = tgpv1.GPURequestPhaseFailed
 			gpuRequest.Status.Message = fmt.Sprintf("Failed to launch instance: %v", err)
+			r.updateCondition(gpuRequest, "InstanceLaunched", metav1.ConditionFalse, "LaunchFailed", err.Error())
 			if updateErr := r.updateStatusWithRetry(ctx, gpuRequest, log); updateErr != nil {
 				log.Error(updateErr, "failed to update status to failed")
 			}
@@ -213,6 +216,7 @@ func (r *GPURequestReconciler) handleProvisioning(ctx context.Context, gpuReques
 		gpuRequest.Status.PublicIP = instance.PublicIP
 		gpuRequest.Status.PrivateIP = instance.PrivateIP
 		gpuRequest.Status.Message = "Instance launched, waiting for ready state"
+		r.updateCondition(gpuRequest, "InstanceLaunched", metav1.ConditionTrue, "LaunchSuccessful", fmt.Sprintf("Instance %s launched successfully on %s", instance.ID, selectedProvider))
 
 		// Get and store pricing information
 		if pricing, err := provider.GetNormalizedPricing(ctx, gpuRequest.Spec.GPUType, gpuRequest.Spec.Region); err == nil {
@@ -296,10 +300,44 @@ func (r *GPURequestReconciler) handleRunning(ctx context.Context, gpuRequest *tg
 		return ctrl.Result{RequeueAfter: TerminatingRequeue}, nil
 	}
 
-	// TODO: Check for idle timeout by monitoring pod scheduling
+	// Perform health check on the running instance
+	if err := r.performHealthCheck(ctx, gpuRequest, log); err != nil {
+		log.Error(err, "health check failed")
+		r.updateCondition(gpuRequest, "InstanceHealthy", metav1.ConditionFalse, "HealthCheckFailed", err.Error())
+		if err := r.updateStatusWithRetry(ctx, gpuRequest, log); err != nil {
+			log.Error(err, "failed to update health check status")
+		}
+		return ctrl.Result{RequeueAfter: RunningRequeue}, nil
+	}
 
-	// Update heartbeat
-	gpuRequest.Status.LastHeartbeat = &metav1.Time{Time: time.Now()}
+	// Check for idle timeout by monitoring pod activity
+	if gpuRequest.Spec.IdleTimeout != nil {
+		if idle, reason, err := r.checkIdleTimeout(ctx, gpuRequest, log); err != nil {
+			log.Error(err, "failed to check idle timeout")
+		} else if idle {
+			log.Info("instance is idle beyond timeout, terminating", "reason", reason)
+			r.updateCondition(gpuRequest, "IdleTimeout", metav1.ConditionTrue, "IdleTimeoutReached", reason)
+			
+			provider, exists := r.Providers[gpuRequest.Status.SelectedProvider]
+			if exists {
+				if err := provider.TerminateInstance(ctx, gpuRequest.Status.InstanceID); err != nil {
+					log.Error(err, "failed to terminate idle instance")
+				}
+			}
+			gpuRequest.Status.Phase = tgpv1.GPURequestPhaseTerminating
+			gpuRequest.Status.Message = fmt.Sprintf("Instance terminated due to idle timeout: %s", reason)
+			if err := r.updateStatusWithRetry(ctx, gpuRequest, log); err != nil {
+				log.Error(err, "failed to update status to terminating due to idle")
+			}
+			return ctrl.Result{RequeueAfter: TerminatingRequeue}, nil
+		}
+	}
+
+	// Update heartbeat and healthy condition
+	now := metav1.Time{Time: time.Now()}
+	gpuRequest.Status.LastHeartbeat = &now
+	r.updateCondition(gpuRequest, "InstanceHealthy", metav1.ConditionTrue, "HealthCheckPassed", "Instance is healthy and responsive")
+	
 	if err := r.updateStatusWithRetry(ctx, gpuRequest, log); err != nil {
 		log.Error(err, "failed to update heartbeat")
 		return ctrl.Result{}, err
@@ -330,6 +368,145 @@ func (r *GPURequestReconciler) handleFailed(ctx context.Context, gpuRequest *tgp
 
 	// TODO: Implement retry logic or cleanup
 	return ctrl.Result{RequeueAfter: time.Minute * 10}, nil
+}
+
+// performHealthCheck verifies the instance is healthy by checking provider status
+func (r *GPURequestReconciler) performHealthCheck(ctx context.Context, gpuRequest *tgpv1.GPURequest, log logr.Logger) error {
+	if gpuRequest.Status.InstanceID == "" || gpuRequest.Status.SelectedProvider == "" {
+		return fmt.Errorf("missing instance information for health check")
+	}
+
+	provider, exists := r.Providers[gpuRequest.Status.SelectedProvider]
+	if !exists {
+		return fmt.Errorf("provider %s not available", gpuRequest.Status.SelectedProvider)
+	}
+
+	status, err := provider.GetInstanceStatus(ctx, gpuRequest.Status.InstanceID)
+	if err != nil {
+		return fmt.Errorf("failed to get instance status: %w", err)
+	}
+
+	// Update instance details from provider status
+	if status.PublicIP != "" && status.PublicIP != gpuRequest.Status.PublicIP {
+		gpuRequest.Status.PublicIP = status.PublicIP
+	}
+	if status.PrivateIP != "" && status.PrivateIP != gpuRequest.Status.PrivateIP {
+		gpuRequest.Status.PrivateIP = status.PrivateIP
+	}
+
+	// Check if instance is still running
+	switch status.State {
+	case providers.InstanceStateRunning:
+		// Instance is healthy
+		return nil
+	case providers.InstanceStateFailed, providers.InstanceStateTerminated:
+		return fmt.Errorf("instance is in failed state: %s - %s", status.State, status.Message)
+	case providers.InstanceStateTerminating:
+		return fmt.Errorf("instance is terminating: %s", status.Message)
+	default:
+		return fmt.Errorf("instance in unexpected state: %s", status.State)
+	}
+}
+
+// updateCondition updates or adds a condition to the GPURequest status
+func (r *GPURequestReconciler) updateCondition(gpuRequest *tgpv1.GPURequest, conditionType string, status metav1.ConditionStatus, reason, message string) {
+	now := metav1.Time{Time: time.Now()}
+	
+	// Find existing condition
+	for i, condition := range gpuRequest.Status.Conditions {
+		if condition.Type == conditionType {
+			// Update existing condition if status changed
+			if condition.Status != status {
+				gpuRequest.Status.Conditions[i].Status = status
+				gpuRequest.Status.Conditions[i].LastTransitionTime = now
+			}
+			gpuRequest.Status.Conditions[i].Reason = reason
+			gpuRequest.Status.Conditions[i].Message = message
+			gpuRequest.Status.Conditions[i].ObservedGeneration = gpuRequest.Generation
+			return
+		}
+	}
+	
+	// Add new condition
+	newCondition := metav1.Condition{
+		Type:               conditionType,
+		Status:             status,
+		LastTransitionTime: now,
+		Reason:             reason,
+		Message:            message,
+		ObservedGeneration: gpuRequest.Generation,
+	}
+	gpuRequest.Status.Conditions = append(gpuRequest.Status.Conditions, newCondition)
+}
+
+// checkIdleTimeout determines if an instance has been idle beyond the configured timeout
+func (r *GPURequestReconciler) checkIdleTimeout(ctx context.Context, gpuRequest *tgpv1.GPURequest, log logr.Logger) (bool, string, error) {
+	idleTimeout := gpuRequest.Spec.IdleTimeout.Duration
+	
+	// If node hasn't been provisioned yet, not considered idle
+	if gpuRequest.Status.ProvisionedAt == nil {
+		return false, "", nil
+	}
+	
+	// Check if enough time has passed since provisioning for idle timeout to be relevant
+	timeSinceProvisioned := time.Since(gpuRequest.Status.ProvisionedAt.Time)
+	if timeSinceProvisioned < idleTimeout {
+		return false, "", nil
+	}
+	
+	// Check for active pods on this node
+	if gpuRequest.Status.NodeName != "" {
+		activePods, err := r.getActivePodsOnNode(ctx, gpuRequest.Status.NodeName)
+		if err != nil {
+			return false, "", fmt.Errorf("failed to get pods on node: %w", err)
+		}
+		
+		// If there are active pods, not idle
+		if activePods > 0 {
+			log.V(1).Info("node has active pods, not idle", "activePods", activePods, "nodeName", gpuRequest.Status.NodeName)
+			return false, "", nil
+		}
+	}
+	
+	// Determine how long the instance has been idle
+	var idleSince time.Time
+	
+	// If we have a last heartbeat with activity, use that
+	if gpuRequest.Status.LastHeartbeat != nil {
+		idleSince = gpuRequest.Status.LastHeartbeat.Time
+	} else {
+		// Fall back to provisioned time
+		idleSince = gpuRequest.Status.ProvisionedAt.Time
+	}
+	
+	idleDuration := time.Since(idleSince)
+	if idleDuration >= idleTimeout {
+		reason := fmt.Sprintf("No pod activity for %v (timeout: %v)", idleDuration.Round(time.Minute), idleTimeout)
+		return true, reason, nil
+	}
+	
+	return false, "", nil
+}
+
+// getActivePodsOnNode returns the number of non-terminal pods scheduled on the given node
+func (r *GPURequestReconciler) getActivePodsOnNode(ctx context.Context, nodeName string) (int, error) {
+	podList := &corev1.PodList{}
+	
+	// List pods on the specific node
+	err := r.List(ctx, podList, client.MatchingFields{"spec.nodeName": nodeName})
+	if err != nil {
+		return 0, err
+	}
+	
+	activePods := 0
+	for _, pod := range podList.Items {
+		// Count pods that are not in terminal states
+		if pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed {
+			activePods++
+		}
+	}
+	
+	return activePods, nil
 }
 
 func (r *GPURequestReconciler) handleDeletion(ctx context.Context, gpuRequest *tgpv1.GPURequest, log logr.Logger) (ctrl.Result, error) {
