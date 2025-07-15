@@ -22,7 +22,9 @@ import (
 
 // mockProvider implements ProviderClient for integration testing
 type mockProvider struct {
-	name string
+	name         string
+	statusCalls  int
+	instanceTime time.Time
 }
 
 func (m *mockProvider) GetProviderInfo() *providers.ProviderInfo {
@@ -52,16 +54,29 @@ func (m *mockProvider) GetNormalizedPricing(ctx context.Context, gpuType, region
 }
 
 func (m *mockProvider) LaunchInstance(ctx context.Context, req *providers.LaunchRequest) (*providers.GPUInstance, error) {
+	m.instanceTime = time.Now()
+	m.statusCalls = 0
 	return &providers.GPUInstance{
 		ID:        "integration-test-instance",
 		Status:    providers.InstanceStatePending,
 		PublicIP:  "192.168.1.100",
 		PrivateIP: "10.0.0.100",
-		CreatedAt: time.Now(),
+		CreatedAt: m.instanceTime,
 	}, nil
 }
 
 func (m *mockProvider) GetInstanceStatus(ctx context.Context, instanceID string) (*providers.InstanceStatus, error) {
+	m.statusCalls++
+	
+	// Simulate provisioning time - first few calls return pending, then running
+	if m.statusCalls <= 2 || time.Since(m.instanceTime) < 2*time.Second {
+		return &providers.InstanceStatus{
+			State:     providers.InstanceStatePending,
+			Message:   "Instance is starting up",
+			UpdatedAt: time.Now(),
+		}, nil
+	}
+	
 	return &providers.InstanceStatus{
 		State:     providers.InstanceStateRunning,
 		Message:   "Instance is running",

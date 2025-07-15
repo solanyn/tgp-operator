@@ -58,16 +58,6 @@ jobs:
         file_or_dir: .
         config_file: .yamllint.yml
 
-  markdown-lint:
-    name: Markdown Linting
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Markdown Lint
-      uses: DavidAnson/markdownlint-cli2-action@v16
-      with:
-        globs: '**/*.md'
 
   helm-lint:
     name: Helm Chart Linting

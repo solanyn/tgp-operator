@@ -29,9 +29,7 @@ linters-settings:
     min-complexity: 15
   goimports:
     local-prefixes: github.com/solanyn/tgp-operator
-  golint:
-    min-confidence: 0
-  gomnd:
+  mnd:
     checks:
       - argument
       - case
@@ -42,12 +40,9 @@ linters-settings:
       - shadow
   lll:
     line-length: 140
-  maligned:
-    suggest-new: true
   misspell:
     locale: US
   nolintlint:
-    allow-leading-space: true
     allow-unused: false
     require-explanation: false
     require-specific: false
@@ -94,7 +89,7 @@ issues:
         - lll
     - path: _test\.go
       linters:
-        - gomnd
+        - mnd
     - linters:
         - lll
       source: "^//\\+kubebuilder"
