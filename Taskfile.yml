@@ -1,5 +1,8 @@
 version: '3'
 
+# Task runner for local development - aligned with CI workflows
+# CI uses the same structure but with GitHub Actions native tools
+
 includes:
   dev: .taskfiles/dev/Taskfile.yml
   test: .taskfiles/test/Taskfile.yml
@@ -7,6 +10,7 @@ includes:
   chart: .taskfiles/chart/Taskfile.yml
   release: .taskfiles/release/Taskfile.yml
   lint: .taskfiles/lint/Taskfile.yml
+  security: .taskfiles/security/Taskfile.yml
 
 tasks:
   default:
@@ -14,40 +18,102 @@ tasks:
     cmds:
       - task --list
 
-  deps:
-    desc: Download Go module dependencies
+  # Basic Setup
+  setup:
+    desc: Setup development environment
     cmds:
       - go mod download
       - go mod tidy
-
-  setup:
-    desc: Setup development environment (run in nix develop shell)
-    cmds:
-      - task: deps
       - task: dev:generate
       - task: test:setup-envtest
-      - task: _setup-git-hooks
-      - echo "Setup complete! You can now run 'task dev:build' or 'task test:all'"
+      - echo "Setup complete! Run 'task help' for common workflows"
 
-  _setup-git-hooks:
-    desc: Install git hooks for conventional commits
-    internal: true
+  help:
+    desc: Show common development workflows
     cmds:
-      - git config core.hooksPath .githooks
-      - git config commit.template .gitmessage
-      - echo "Git hooks configured for conventional commits"
+      - |
+        echo "Common workflows:"
+        echo "  task build          - Build the operator"
+        echo "  task test           - Run all tests"
+        echo "  task lint           - Run all linters" 
+        echo "  task lint:fix       - Fix all auto-fixable issues"
+        echo "  task security       - Run security scans"
+        echo "  task ci:local       - Run full CI suite locally"
+        echo ""
+        echo "See 'task --list' for all available tasks"
 
-  ci:
-    desc: Run CI workflow (build, test, lint)
+  # Core Development Tasks (matches CI structure)
+  build:
+    desc: Build the operator binary
+    deps: [dev:generate]
     cmds:
-      - task: deps
-      - task: dev:generate
       - task: dev:build
-      - task: test:all
+
+  test:
+    desc: Run all tests (unit + integration)
+    cmds:
+      - task: test:unit
+      - task: test:integration
+
+  lint:
+    desc: Run all linters
+    cmds:
       - task: lint:all
 
-  deploy:
-    desc: Build container and generate chart
+  lint:fix:
+    desc: Auto-fix all formatting issues
+    cmds:
+      - task: lint:fix-all
+
+  security:
+    desc: Run security scans
+    cmds:
+      - task: security:all
+
+  # CI Simulation - runs same checks as GitHub Actions
+  ci:local:
+    desc: Run full CI suite locally (simulates GitHub Actions)
+    cmds:
+      - echo "Running CI checks locally..."
+      - task: lint
+      - task: test
+      - task: security
+      - task: docker:build
+      - echo "✅ All CI checks passed!"
+
+  ci:pr:
+    desc: Run PR checks locally before pushing
+    cmds:
+      - echo "Running PR checks..."
+      - task: lint
+      - task: test:unit
+      - task: dev:build
+      - echo "✅ PR checks passed! Ready to push."
+
+  # Quick Commands
+  fix:
+    desc: Quick fix for common issues (formatting, imports, etc)
+    cmds:
+      - task: lint:fix
+
+  check:
+    desc: Quick check before committing
+    cmds:
+      - task: lint:go
+      - task: test:unit
+
+  # Deployment
+  deploy:local:
+    desc: Deploy to local Talos cluster
     cmds:
       - task: docker:build
-      - task: chart:template
+      - task: test:setup-talos
+      - task: chart:install
+      - echo "Deployed to local Talos cluster"
+
+  deploy:talos:
+    desc: Deploy to existing Talos cluster
+    cmds:
+      - task: docker:build
+      - task: chart:install
+      - echo "Deployed to Talos cluster"
