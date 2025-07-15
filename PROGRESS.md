@@ -23,19 +23,96 @@
 
 **Development** - Migrated from Nix to mise for simplified tool management and contributor onboarding.
 
+## Implementation Roadmap
+
+### Sprint 1: Spot Instance Support (1-2 weeks)
+1. **Update Provider Interface** - Add spot pricing methods to all providers
+2. **Extend CRD** - Add `spotInstance: true/false` and `maxSpotPrice` fields  
+3. **Controller Logic** - Implement spot vs on-demand selection algorithm
+4. **Interruption Handling** - Add spot interruption detection and recovery
+5. **Testing** - Add comprehensive spot instance test coverage
+
+### Sprint 2: Multi-GPU Support (1-2 weeks)  
+1. **CRD Extension** - Add `gpuCount: int` field to GPURequest
+2. **Provider Updates** - Extend all providers to support multi-GPU instances
+3. **Pricing Logic** - Update pricing calculations for multi-GPU setups
+4. **Validation** - Add GPU count limits and validation rules
+5. **Monitoring** - Track multi-GPU resource utilization
+
+### Sprint 3: Region Preference & Failover (1-2 weeks)
+1. **CRD Enhancement** - Add `regionPreference: []string` field
+2. **Failover Logic** - Implement automatic region failover on unavailability  
+3. **Cross-Region Pricing** - Compare costs across preferred regions
+4. **Selection Algorithm** - Optimize for cost, availability, and preference
+5. **Observability** - Add region-specific metrics and alerting
+
+## Feature Examples
+
+### Spot Instance Request
+```yaml
+apiVersion: tgp.solanyn.com/v1
+kind: GPURequest
+metadata:
+  name: spot-training-job
+spec:
+  gpuType: "RTX4090"
+  region: "us-west"
+  spotInstance: true
+  maxSpotPrice: 0.25
+  maxPrice: 0.50  # Fallback to on-demand if spot > $0.25
+```
+
+### Multi-GPU Request
+```yaml
+apiVersion: tgp.solanyn.com/v1
+kind: GPURequest
+metadata:
+  name: multi-gpu-training
+spec:
+  gpuType: "A100"
+  gpuCount: 4
+  region: "us-east"
+  maxPrice: 10.0  # Total cost for all 4 GPUs
+```
+
+### Region Preference with Failover
+```yaml
+apiVersion: tgp.solanyn.com/v1
+kind: GPURequest
+metadata:
+  name: region-aware-job
+spec:
+  gpuType: "H100"
+  regionPreference: ["us-west-1", "us-east-1", "eu-west-1"]
+  maxPrice: 3.0
+  spotInstance: true
+```
+
 ## Current TODO List
 
-### High Priority - Spot Instance Support
+### High Priority - Core Features
+**Spot Instance Support**
 - [x] Design spot instance support architecture and CRD changes
 - [x] Document current provider API implementations and maintenance strategy  
 - [x] Complete API implementations for Lambda Labs, RunPod, and Paperspace
 - [ ] Update provider interface to support spot pricing and availability
 - [ ] Implement spot instance request logic in controller
 - [ ] Add spot instance interruption handling
-
-### Medium Priority - Spot Instance Support
 - [ ] Update pricing cache to track spot vs on-demand pricing
-- [ ] Add tests for spot instance functionality
+
+**Multi-GPU Support**
+- [ ] Extend GPURequest CRD to support multiple GPU requests
+- [ ] Update provider clients to handle multi-GPU instances
+- [ ] Add multi-GPU pricing and availability logic
+- [ ] Implement GPU count validation and selection
+- [ ] Add multi-GPU instance monitoring and health checks
+
+**Region Preference & Failover**
+- [ ] Add region preference ordering to GPURequest CRD
+- [ ] Implement region failover logic in controller
+- [ ] Add cross-region availability checking
+- [ ] Create region-aware instance selection algorithm
+- [ ] Add regional cost optimization
 
 ### Completed
 - [x] Add basic observability - metrics and logging for production
@@ -51,19 +128,18 @@
 
 ## Future Enhancements
 
-### High Priority
-- [ ] Support for spot/preemptible instances across providers
-- [ ] Multi-GPU instance support  
-- [ ] Regional failover capabilities
-
 ### Medium Priority
-- [ ] Cost tracking and reporting features
+- [ ] Cost tracking and reporting dashboard
 - [ ] Real-time provider pricing comparison
-- [ ] Enhanced node lifecycle events
-- [ ] Advanced placement strategies
+- [ ] Enhanced node lifecycle events with custom metrics
+- [ ] Advanced placement strategies (affinity/anti-affinity)
+- [ ] GPU resource quotas and limits per namespace
+- [ ] Automated cost optimization recommendations
 
 ### Long Term
 - [ ] Support for additional providers (AWS, GCP, Azure)
 - [ ] Predictive scaling based on workload patterns
 - [ ] Integration with cluster autoscaler
 - [ ] Web UI for GPU request management
+- [ ] GPU workload scheduling optimization
+- [ ] Custom resource scaling policies
