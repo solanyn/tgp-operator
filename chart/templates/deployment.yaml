@@ -35,12 +35,6 @@ spec:
         - --metrics-bind-address=:{{ .Values.metrics.port }}
         - --leader-elect
         env:
-        - name: VAST_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: {{ .Values.providers.vastai.secretName }}
-              key: {{ .Values.providers.vastai.secretKey }}
-              optional: true
         - name: RUNPOD_API_KEY
           valueFrom:
             secretKeyRef:

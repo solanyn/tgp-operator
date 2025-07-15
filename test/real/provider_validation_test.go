@@ -12,7 +12,6 @@ import (
 	"github.com/solanyn/tgp-operator/pkg/providers/lambdalabs"
 	"github.com/solanyn/tgp-operator/pkg/providers/paperspace"
 	"github.com/solanyn/tgp-operator/pkg/providers/runpod"
-	"github.com/solanyn/tgp-operator/pkg/providers/vast"
 )
 
 // TestProviderValidation validates real cloud provider connections and basic functionality
@@ -30,11 +29,6 @@ func TestProviderValidation(t *testing.T) {
 		createFn  func(string) providers.ProviderClient
 		skipCheck func() bool
 	}{
-		{
-			name:     "vast.ai",
-			envVar:   "VAST_API_KEY",
-			createFn: func(key string) providers.ProviderClient { return vast.NewClient(key) },
-		},
 		{
 			name:     "runpod",
 			envVar:   "RUNPOD_API_KEY",
@@ -120,7 +114,6 @@ func TestProviderValidation(t *testing.T) {
 // TestProviderConnectivity tests basic connectivity to provider APIs
 func TestProviderConnectivity(t *testing.T) {
 	providers := map[string]string{
-		"vast.ai":     os.Getenv("VAST_API_KEY"),
 		"runpod":      os.Getenv("RUNPOD_API_KEY"),
 		"lambda-labs": os.Getenv("LAMBDA_LABS_API_KEY"),
 		"paperspace":  os.Getenv("PAPERSPACE_API_KEY"),

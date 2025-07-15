@@ -21,24 +21,28 @@ tasks:
       - task: generate-runpod-client
 
   generate-lambda-client:
-    desc: Generate Lambda Labs client from OpenAPI spec
+    desc: Generate Lambda Labs client from converted OpenAPI spec
     deps: [install-codegen]
     cmds:
-      - bin/oapi-codegen -generate "types,client" -package "lambdalabs" -o pkg/providers/lambdalabs/generated.go https://cloud.lambda.ai/api/v1/openapi.json
+      - curl -s https://cloud.lambda.ai/api/v1/openapi.json > /tmp/lambda-openapi-3.1.json
+      - mise exec -- openapi-down-convert -i /tmp/lambda-openapi-3.1.json -o /tmp/lambda-openapi-3.0-converted.json
+      - mkdir -p pkg/providers/lambdalabs/api
+      - bin/oapi-codegen -generate "types,client" -package "api" -exclude-tags "Filesystems,SSH Keys" -o pkg/providers/lambdalabs/api/generated.go /tmp/lambda-openapi-3.0-converted.json
     sources:
       - https://cloud.lambda.ai/api/v1/openapi.json
     generates:
-      - pkg/providers/lambdalabs/generated.go
+      - pkg/providers/lambdalabs/api/generated.go
 
   generate-paperspace-client:
     desc: Generate Paperspace client from OpenAPI spec
     deps: [install-codegen]
     cmds:
-      - bin/oapi-codegen -generate "types,client" -package "paperspace" -o pkg/providers/paperspace/generated.go https://api.paperspace.com/v1/openapi.json
+      - mkdir -p pkg/providers/paperspace/api
+      - bin/oapi-codegen -generate "types,client" -package "api" -o pkg/providers/paperspace/api/generated.go https://api.paperspace.com/v1/openapi.json
     sources:
       - https://api.paperspace.com/v1/openapi.json
     generates:
-      - pkg/providers/paperspace/generated.go
+      - pkg/providers/paperspace/api/generated.go
 
   generate-runpod-client:
     desc: Generate RunPod GraphQL client
