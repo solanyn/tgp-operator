@@ -1,12 +1,12 @@
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # Install ca-certificates for HTTPS requests
 RUN apk --no-cache add ca-certificates git
 
 WORKDIR /workspace
 
-# Copy go mod files
+# Copy go mod files first for better caching
 COPY go.mod go.sum ./
 RUN go mod download
 
@@ -14,10 +14,12 @@ RUN go mod download
 COPY cmd/ cmd/
 COPY pkg/ pkg/
 
-# Build the manager binary with security hardening
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+# Build the manager binary with security hardening and optimizations
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -ldflags='-w -s -extldflags "-static"' \
-    -a -installsuffix cgo \
+    -trimpath \
     -o manager cmd/manager/main.go
 
 # Runtime stage - distroless for minimal attack surface

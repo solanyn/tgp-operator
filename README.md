@@ -12,6 +12,8 @@ Addresses intermittent GPU compute needs by provisioning instances on-demand fro
 - **WireGuard connectivity** - Encrypted networking between cloud instances and cluster
 - **Lifecycle management** - Automated provisioning, configuration, and cleanup
 - **Pay-per-use model** - Resources exist only when actively needed
+- **Production monitoring** - Prometheus metrics for cost tracking and operational visibility
+- **Provider validation** - Credential verification and API connectivity testing
 
 ## Quick Start
 
@@ -74,6 +76,19 @@ The operator consists of:
 - **Provider clients** - Interface with cloud provider APIs
 - **Pricing cache** - Tracks real-time pricing for cost optimization
 - **Node lifecycle** - Manages instance provisioning and Kubernetes integration
+- **Metrics collection** - Prometheus metrics for monitoring and cost tracking
+
+## Monitoring
+
+Prometheus metrics are exposed on `:8080/metrics`:
+
+```bash
+# Access metrics locally
+kubectl port-forward -n tgp-system deployment/tgp-operator 8080:8080
+curl http://localhost:8080/metrics | grep tgp_operator
+```
+
+Key metrics include request counts, launch durations, active instances, costs, and provider performance.
 
 ## Development
 
