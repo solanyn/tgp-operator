@@ -15,12 +15,12 @@ type Client struct {
 
 func NewClient(apiKey string) *Client {
 	info := &providers.ProviderInfo{
-		Name:                 "runpod",
-		APIVersion:          "v1",
-		SupportedRegions:    []string{providers.RegionUSEast, providers.RegionUSWest},
-		SupportedGPUTypes:   []string{providers.GPUTypeRTX4090, providers.GPUTypeH100, providers.GPUTypeA100},
+		Name:                  "runpod",
+		APIVersion:            "v1",
+		SupportedRegions:      []string{providers.RegionUSEast, providers.RegionUSWest},
+		SupportedGPUTypes:     []string{providers.GPUTypeRTX4090, providers.GPUTypeH100, providers.GPUTypeA100},
 		SupportsSpotInstances: true,
-		BillingGranularity:  providers.BillingPerSecond,
+		BillingGranularity:    providers.BillingPerSecond,
 	}
 
 	rateLimits := &providers.RateLimitInfo{

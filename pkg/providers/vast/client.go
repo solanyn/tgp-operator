@@ -14,11 +14,11 @@ import (
 // Client implements the ProviderClient interface for Vast.ai
 type Client struct {
 	*providers.BaseProvider
-	apiKey           string
-	httpClient       *http.Client
-	baseURL          string
-	gpuTranslator    *providers.GPUTypeTranslator
-	regionTranslator *providers.RegionTranslator
+	apiKey            string
+	httpClient        *http.Client
+	baseURL           string
+	gpuTranslator     *providers.GPUTypeTranslator
+	regionTranslator  *providers.RegionTranslator
 	pricingNormalizer *providers.PricingNormalizer
 }
 
@@ -26,14 +26,14 @@ type Client struct {
 func NewClient(apiKey string) *Client {
 	// Vast.ai provider info
 	info := &providers.ProviderInfo{
-		Name:                 "vast.ai",
-		APIVersion:          "v1",
-		SupportedRegions:    []string{providers.RegionUSEast, providers.RegionUSWest, providers.RegionEUCentral},
-		SupportedGPUTypes:   []string{providers.GPUTypeRTX4090, providers.GPUTypeRTX3090, providers.GPUTypeH100, providers.GPUTypeA100},
+		Name:                  "vast.ai",
+		APIVersion:            "v1",
+		SupportedRegions:      []string{providers.RegionUSEast, providers.RegionUSWest, providers.RegionEUCentral},
+		SupportedGPUTypes:     []string{providers.GPUTypeRTX4090, providers.GPUTypeRTX3090, providers.GPUTypeH100, providers.GPUTypeA100},
 		SupportsSpotInstances: true,
-		SupportsMultiGPU:    true,
-		BillingGranularity:  providers.BillingPerHour,
-		MinBillingPeriod:    time.Hour,
+		SupportsMultiGPU:      true,
+		BillingGranularity:    providers.BillingPerHour,
+		MinBillingPeriod:      time.Hour,
 	}
 
 	// Rate limits based on observed Vast.ai behavior
@@ -48,7 +48,7 @@ func NewClient(apiKey string) *Client {
 	// GPU type mappings from standard to Vast.ai specific
 	gpuMappings := map[string]string{
 		providers.GPUTypeRTX4090: "RTX_4090",
-		providers.GPUTypeRTX3090: "RTX_3090", 
+		providers.GPUTypeRTX3090: "RTX_3090",
 		providers.GPUTypeH100:    "H100",
 		providers.GPUTypeA100:    "A100",
 	}
@@ -56,17 +56,17 @@ func NewClient(apiKey string) *Client {
 	// Region mappings
 	regionMappings := map[string]string{
 		providers.RegionUSEast:    "US",
-		providers.RegionUSWest:    "US", 
+		providers.RegionUSWest:    "US",
 		providers.RegionEUCentral: "EU",
 	}
 
 	return &Client{
 		BaseProvider:      providers.NewBaseProvider(info, rateLimits),
-		apiKey:           apiKey,
-		httpClient:       &http.Client{Timeout: 30 * time.Second},
-		baseURL:          "https://console.vast.ai/api/v0",
-		gpuTranslator:    providers.NewGPUTypeTranslator(gpuMappings),
-		regionTranslator: providers.NewRegionTranslator(regionMappings),
+		apiKey:            apiKey,
+		httpClient:        &http.Client{Timeout: 30 * time.Second},
+		baseURL:           "https://console.vast.ai/api/v0",
+		gpuTranslator:     providers.NewGPUTypeTranslator(gpuMappings),
+		regionTranslator:  providers.NewRegionTranslator(regionMappings),
 		pricingNormalizer: providers.NewPricingNormalizer(providers.BillingPerHour),
 	}
 }
@@ -80,21 +80,21 @@ func (c *Client) TranslateRegion(standard string) (string, error) {
 }
 
 type vastOffer struct {
-	ID             int     `json:"id"`
-	GPUName        string  `json:"gpu_name"`
-	NumGPUs        int     `json:"num_gpus"`
-	DiskSpace      float64 `json:"disk_space"`
-	RAMAmount      float64 `json:"ram_amount"`
-	StorageCost    float64 `json:"storage_cost"`
-	DpPh           float64 `json:"dph_total"`
-	Reliability    float64 `json:"reliability"`
-	Verified       bool    `json:"verified"`
-	Available      bool    `json:"available"`
-	ComputeCap     int     `json:"compute_cap"`
-	DriverVersion  string  `json:"driver_version"`
-	CudaVersion    string  `json:"cuda_max_good"`
-	Datacenter     string  `json:"datacenter"`
-	CountryCode    string  `json:"geolocation"`
+	ID            int     `json:"id"`
+	GPUName       string  `json:"gpu_name"`
+	NumGPUs       int     `json:"num_gpus"`
+	DiskSpace     float64 `json:"disk_space"`
+	RAMAmount     float64 `json:"ram_amount"`
+	StorageCost   float64 `json:"storage_cost"`
+	DpPh          float64 `json:"dph_total"`
+	Reliability   float64 `json:"reliability"`
+	Verified      bool    `json:"verified"`
+	Available     bool    `json:"available"`
+	ComputeCap    int     `json:"compute_cap"`
+	DriverVersion string  `json:"driver_version"`
+	CudaVersion   string  `json:"cuda_max_good"`
+	Datacenter    string  `json:"datacenter"`
+	CountryCode   string  `json:"geolocation"`
 }
 
 func (c *Client) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFilters) ([]providers.GPUOffer, error) {
@@ -111,14 +111,14 @@ func (c *Client) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFi
 		vastGPUType = translated
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/bundles", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/bundles", http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	q := req.URL.Query()
 	if vastGPUType != "" {
-		q.Add("q", fmt.Sprintf(`gpu_name:"%s"`, vastGPUType))
+		q.Add("q", fmt.Sprintf("gpu_name:%q", vastGPUType))
 	}
 	if filters.MaxPrice > 0 {
 		q.Add("order", "dph_total")
@@ -132,7 +132,7 @@ func (c *Client) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFi
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API request failed with status %d", resp.StatusCode)
@@ -204,12 +204,12 @@ func (c *Client) GetNormalizedPricing(ctx context.Context, gpuType, region strin
 }
 
 type vastInstance struct {
-	ID         int    `json:"id"`
-	Status     string `json:"actual_status"`
-	PublicIP   string `json:"public_ipaddr"`
-	SSHHost    string `json:"ssh_host"`
-	SSHPort    int    `json:"ssh_port"`
-	CreatedAt  string `json:"start_date"`
+	ID        int    `json:"id"`
+	Status    string `json:"actual_status"`
+	PublicIP  string `json:"public_ipaddr"`
+	SSHHost   string `json:"ssh_host"`
+	SSHPort   int    `json:"ssh_port"`
+	CreatedAt string `json:"start_date"`
 }
 
 func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchRequest) (*providers.GPUInstance, error) {
@@ -252,8 +252,8 @@ func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchReques
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "PUT", 
-		fmt.Sprintf("%s/asks/%s/", c.baseURL, selectedOffer.ID), 
+	httpReq, err := http.NewRequestWithContext(ctx, "PUT",
+		fmt.Sprintf("%s/asks/%s/", c.baseURL, selectedOffer.ID),
 		bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -266,7 +266,7 @@ func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchReques
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to launch instance: status %d", resp.StatusCode)
@@ -294,8 +294,8 @@ func (c *Client) GetInstanceStatus(ctx context.Context, instanceID string) (*pro
 		return nil, fmt.Errorf("rate limit exceeded: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", 
-		fmt.Sprintf("%s/instances/%s/", c.baseURL, instanceID), nil)
+	req, err := http.NewRequestWithContext(ctx, "GET",
+		fmt.Sprintf("%s/instances/%s/", c.baseURL, instanceID), http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -306,7 +306,7 @@ func (c *Client) GetInstanceStatus(ctx context.Context, instanceID string) (*pro
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get instance status: status %d", resp.StatusCode)
@@ -330,8 +330,8 @@ func (c *Client) TerminateInstance(ctx context.Context, instanceID string) error
 		return fmt.Errorf("rate limit exceeded: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "DELETE", 
-		fmt.Sprintf("%s/instances/%s/", c.baseURL, instanceID), nil)
+	req, err := http.NewRequestWithContext(ctx, "DELETE",
+		fmt.Sprintf("%s/instances/%s/", c.baseURL, instanceID), http.NoBody)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -342,7 +342,7 @@ func (c *Client) TerminateInstance(ctx context.Context, instanceID string) error
 	if err != nil {
 		return fmt.Errorf("failed to make request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to terminate instance: status %d", resp.StatusCode)
