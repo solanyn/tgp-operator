@@ -18,7 +18,91 @@ import (
 
 	tgpv1 "github.com/solanyn/tgp-operator/pkg/api/v1"
 	"github.com/solanyn/tgp-operator/pkg/controllers"
+	"github.com/solanyn/tgp-operator/pkg/pricing"
+	"github.com/solanyn/tgp-operator/pkg/providers"
 )
+
+// mockProvider implements ProviderClient for E2E testing
+type mockProvider struct {
+	name         string
+	statusCalls  int
+	instanceTime time.Time
+}
+
+func (m *mockProvider) GetProviderInfo() *providers.ProviderInfo {
+	return &providers.ProviderInfo{Name: m.name}
+}
+
+func (m *mockProvider) GetRateLimits() *providers.RateLimitInfo {
+	return &providers.RateLimitInfo{RequestsPerSecond: 10}
+}
+
+func (m *mockProvider) TranslateGPUType(standard string) (string, error) {
+	return standard, nil
+}
+
+func (m *mockProvider) TranslateRegion(standard string) (string, error) {
+	return standard, nil
+}
+
+func (m *mockProvider) GetNormalizedPricing(ctx context.Context, gpuType, region string) (*providers.NormalizedPricing, error) {
+	return &providers.NormalizedPricing{
+		PricePerHour:   0.50,
+		PricePerSecond: 0.50 / 3600,
+		Currency:       "USD",
+		BillingModel:   providers.BillingPerHour,
+		LastUpdated:    time.Now(),
+	}, nil
+}
+
+func (m *mockProvider) LaunchInstance(ctx context.Context, req *providers.LaunchRequest) (*providers.GPUInstance, error) {
+	m.instanceTime = time.Now()
+	m.statusCalls = 0
+	return &providers.GPUInstance{
+		InstanceID: "mock-instance-123",
+		PublicIP:   "192.168.1.100",
+		PrivateIP:  "10.0.0.100",
+		Status:     "provisioning",
+		GPUType:    req.GPUType,
+		Region:     req.Region,
+		Provider:   m.name,
+	}, nil
+}
+
+func (m *mockProvider) GetInstanceStatus(ctx context.Context, instanceID string) (*providers.InstanceStatus, error) {
+	m.statusCalls++
+	// Simulate provisioning time - first few calls return "pending", then "running"
+	if m.statusCalls < 3 {
+		return &providers.InstanceStatus{
+			InstanceID: instanceID,
+			Status:     "pending",
+			PublicIP:   "192.168.1.100",
+			PrivateIP:  "10.0.0.100",
+		}, nil
+	}
+	return &providers.InstanceStatus{
+		InstanceID: instanceID,
+		Status:     "running",
+		PublicIP:   "192.168.1.100",
+		PrivateIP:  "10.0.0.100",
+	}, nil
+}
+
+func (m *mockProvider) TerminateInstance(ctx context.Context, instanceID string) error {
+	return nil
+}
+
+func (m *mockProvider) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFilters) ([]providers.GPUOffer, error) {
+	return []providers.GPUOffer{
+		{
+			GPUType:      "RTX3090",
+			PricePerHour: 0.50,
+			Region:       "us-east-1",
+			Provider:     m.name,
+			Available:    true,
+		},
+	}, nil
+}
 
 func TestE2E(t *testing.T) {
 	if os.Getenv("USE_EXISTING_CLUSTER") != "true" {
@@ -68,6 +152,10 @@ func TestE2E(t *testing.T) {
 		Client: mgr.GetClient(),
 		Log:    zap.New(zap.UseDevMode(true)),
 		Scheme: mgr.GetScheme(),
+		Providers: map[string]providers.ProviderClient{
+			"runpod": &mockProvider{name: "runpod"},
+		},
+		PricingCache: pricing.NewCache(time.Minute * 5),
 	}).SetupWithManager(mgr); err != nil {
 		t.Fatalf("Failed to setup controller: %v", err)
 	}
@@ -99,7 +187,7 @@ func TestE2E(t *testing.T) {
 				Namespace: namespace,
 			},
 			Spec: tgpv1.GPURequestSpec{
-				Provider: "vast.ai",
+				Provider: "runpod",
 				GPUType:  "RTX3090",
 				Region:   "us-east-1",
 				TalosConfig: tgpv1.TalosConfig{

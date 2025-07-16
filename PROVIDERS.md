@@ -1,10 +1,10 @@
-# Provider API Documentation
+# Providers
 
-This document describes how the TGP operator integrates with various cloud GPU providers, including API endpoints, data models, and spot instance capabilities.
+This document describes how the Talos GPU Provisioner operator integrates with various cloud GPU providers, including API endpoints, data models and spot instance capabilities.
 
 ## Overview
 
-The TGP operator abstracts different cloud GPU providers through a unified interface. Each provider client implements the `ProviderClient` interface defined in `pkg/providers/interface.go`.
+The Talos GPU Provisioner operator abstracts different cloud GPU providers through a unified interface. Each provider client implements the `ProviderClient` interface defined in `pkg/providers/interface.go`.
 
 ## Provider Interface
 

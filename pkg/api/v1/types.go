@@ -51,19 +51,51 @@ type TalosConfig struct {
 // WireGuardConfig contains WireGuard VPN configuration
 type WireGuardConfig struct {
 	// PrivateKey is the WireGuard private key for the node
-	PrivateKey string `json:"privateKey"`
+	// Can be specified directly or via PrivateKeySecretRef
+	PrivateKey string `json:"privateKey,omitempty"`
+
+	// PrivateKeySecretRef references a secret containing the private key
+	PrivateKeySecretRef *SecretKeyRef `json:"privateKeySecretRef,omitempty"`
 
 	// PublicKey is the WireGuard public key for the node
-	PublicKey string `json:"publicKey"`
+	// Can be specified directly or via PublicKeySecretRef
+	PublicKey string `json:"publicKey,omitempty"`
+
+	// PublicKeySecretRef references a secret containing the public key
+	PublicKeySecretRef *SecretKeyRef `json:"publicKeySecretRef,omitempty"`
 
 	// ServerEndpoint is the WireGuard server endpoint
-	ServerEndpoint string `json:"serverEndpoint"`
+	// Can be specified directly or via ServerEndpointSecretRef
+	ServerEndpoint string `json:"serverEndpoint,omitempty"`
+
+	// ServerEndpointSecretRef references a secret containing the server endpoint
+	ServerEndpointSecretRef *SecretKeyRef `json:"serverEndpointSecretRef,omitempty"`
 
 	// AllowedIPs specifies allowed IP ranges through the VPN
-	AllowedIPs []string `json:"allowedIPs"`
+	// Can be specified directly or via AllowedIPsSecretRef
+	AllowedIPs []string `json:"allowedIPs,omitempty"`
+
+	// AllowedIPsSecretRef references a secret containing allowed IPs (comma-separated)
+	AllowedIPsSecretRef *SecretKeyRef `json:"allowedIPsSecretRef,omitempty"`
 
 	// Address is the VPN IP address for this node
-	Address string `json:"address"`
+	// Can be specified directly or via AddressSecretRef
+	Address string `json:"address,omitempty"`
+
+	// AddressSecretRef references a secret containing the VPN address
+	AddressSecretRef *SecretKeyRef `json:"addressSecretRef,omitempty"`
+}
+
+// SecretKeyRef references a specific key in a Kubernetes secret
+type SecretKeyRef struct {
+	// Name is the name of the secret
+	Name string `json:"name"`
+
+	// Key is the key within the secret
+	Key string `json:"key"`
+
+	// Namespace is the namespace of the secret (optional, defaults to GPURequest namespace)
+	Namespace string `json:"namespace,omitempty"`
 }
 
 // GPURequestStatus defines the observed state of GPURequest

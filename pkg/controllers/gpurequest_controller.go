@@ -764,10 +764,20 @@ func (r *GPURequestReconciler) executeLaunchRequest(
 	provider providers.ProviderClient,
 	log logr.Logger,
 ) (*providers.GPUInstance, error) {
+	// Resolve any secret references in WireGuardConfig
+	resolvedWireGuardConfig, err := gpuRequest.Spec.TalosConfig.WireGuardConfig.Resolve(ctx, r.Client, gpuRequest.Namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve WireGuard config secrets: %w", err)
+	}
+
+	// Create resolved TalosConfig
+	resolvedTalosConfig := gpuRequest.Spec.TalosConfig
+	resolvedTalosConfig.WireGuardConfig = *resolvedWireGuardConfig
+
 	launchReq := &providers.LaunchRequest{
 		GPUType:      gpuRequest.Spec.GPUType,
 		Region:       gpuRequest.Spec.Region,
-		TalosConfig:  &gpuRequest.Spec.TalosConfig,
+		TalosConfig:  &resolvedTalosConfig,
 		SpotInstance: gpuRequest.Spec.Spot,
 	}
 

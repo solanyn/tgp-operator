@@ -243,6 +243,20 @@ The task runner is aligned with our CI/CD workflows for consistency between loca
 - `task test:e2e` - Run true e2e tests against real cloud providers
 - `task test:all` - Run all safe tests (unit + integration)
 
+#### Provider Testing
+
+Test individual provider APIs locally:
+
+```bash
+# Test provider APIs locally (requires 1Password CLI)
+task test:provider -- -provider=runpod -action=list
+task test:provider -- -provider=lambdalabs -action=pricing -gpu-type=A100
+task test:provider -- -provider=paperspace -action=info
+
+# Test all providers
+task test:providers
+```
+
 ### Linting & Formatting
 
 - `task lint:all` - Run all linting checks
@@ -450,4 +464,3 @@ Tasks are designed to match CI workflows:
 - Renovate automatically updates dependencies
 - Auto-merges minor/patch updates after CI passes
 - Requires manual approval for major updates and Kubernetes packages
-
