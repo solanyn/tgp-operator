@@ -2,9 +2,9 @@ name: Lint
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_call:
 
 jobs:
@@ -12,80 +12,80 @@ jobs:
     name: Go Linting
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    
-    - uses: actions/setup-go@v5
-      with:
-        go-version-file: 'go.mod'
-        cache: true
-    
-    - name: golangci-lint
-      uses: golangci/golangci-lint-action@v6
-      with:
-        version: v1.57.2
-        args: --timeout 5m
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
+          args: --timeout 5m
 
   go-format:
     name: Go Formatting
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    
-    - uses: actions/setup-go@v5
-      with:
-        go-version-file: 'go.mod'
-        cache: true
-    
-    - name: Install formatters
-      run: |
-        go install mvdan.cc/gofumpt@latest
-        go install golang.org/x/tools/cmd/goimports@latest
-    
-    - name: Check formatting
-      run: |
-        test -z "$(gofumpt -l .)" || (echo "Files need formatting. Run 'gofumpt -w .' to fix." && exit 1)
-        test -z "$(goimports -l .)" || (echo "Imports need formatting. Run 'goimports -w .' to fix." && exit 1)
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
+
+      - name: Install formatters
+        run: |
+          go install mvdan.cc/gofumpt@latest
+          go install golang.org/x/tools/cmd/goimports@latest
+
+      - name: Check formatting
+        run: |
+          test -z "$(gofumpt -l .)" || (echo "Files need formatting. Run 'gofumpt -w .' to fix." && exit 1)
+          test -z "$(goimports -l .)" || (echo "Imports need formatting. Run 'goimports -w .' to fix." && exit 1)
 
   yaml-lint:
     name: YAML Linting
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: YAML Lint
-      uses: ibiqlik/action-yamllint@v3
-      with:
-        file_or_dir: .
-        config_file: .yamllint.yml
+      - uses: actions/checkout@v4
 
+      - name: YAML Lint
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: .
+          config_file: .yamllint.yml
 
   helm-lint:
     name: Helm Chart Linting
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup Helm
-      uses: azure/setup-helm@v4
-      with:
-        version: v3.14.0
-    
-    - name: Lint Helm chart
-      run: |
-        helm lint charts/tgp-operator
-    
-    - name: Template Helm chart
-      run: |
-        helm template tgp-operator charts/tgp-operator > /dev/null
+      - uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Lint Helm chart
+        run: |
+          helm lint chart
+
+      - name: Template Helm chart
+        run: |
+          helm template tgp-operator chart > /dev/null
 
   actionlint:
     name: GitHub Actions Linting
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: actionlint
-      uses: reviewdog/action-actionlint@v1
-      with:
-        reporter: github-pr-check
-        fail_on_error: true
+      - uses: actions/checkout@v4
+
+      - name: actionlint
+        uses: reviewdog/action-actionlint@v1
+        with:
+          reporter: github-pr-check
+          fail_on_error: true
+

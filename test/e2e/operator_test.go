@@ -20,7 +20,7 @@ import (
 	"github.com/solanyn/tgp-operator/pkg/controllers"
 )
 
-func TestOperatorE2E(t *testing.T) {
+func TestE2E(t *testing.T) {
 	if os.Getenv("USE_EXISTING_CLUSTER") != "true" {
 		t.Skip("Skipping e2e tests, set USE_EXISTING_CLUSTER=true to run")
 	}
@@ -86,7 +86,7 @@ func TestOperatorE2E(t *testing.T) {
 
 	k8sClient := mgr.GetClient()
 
-	t.Run("GPURequest end-to-end workflow", func(t *testing.T) {
+	t.Run("GPURequest_lifecycle", func(t *testing.T) {
 		t.Log("Testing GPURequest lifecycle on Talos cluster...")
 
 		// Use default namespace for simplicity
