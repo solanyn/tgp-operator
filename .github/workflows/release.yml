@@ -1,97 +1,81 @@
+---
 name: Release
-
 on:
   workflow_dispatch:
     inputs:
       version-type:
-        description: 'Version bump type'
+        description: Version bump type
         required: false
-        default: 'auto'
+        default: auto
         type: choice
-        options:
-        - auto
-        - patch
-        - minor
-        - major
-
+        options: [auto, patch, minor, major]
 permissions:
   contents: write
   packages: write
-
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        token: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Free disk space
-      run: |
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /usr/local/lib/android
-        sudo rm -rf /opt/ghc
-        sudo rm -rf /opt/hostedtoolcache/CodeQL
-        sudo docker system prune -af
-        df -h
-    
-    - uses: actions/setup-go@v5
-      with:
-        go-version-file: 'go.mod'
-        cache: true
-    
-    - name: Install task runner
-      run: |
-        sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
-    
-    - name: Install semantic version tool
-      run: |
-        curl -L https://github.com/caarlos0/svu/releases/download/v1.12.0/svu_1.12.0_linux_amd64.tar.gz | tar xz
-        sudo mv svu /usr/local/bin/
-    
-    - name: Setup development environment
-      run: |
-        task setup
-    
-    - name: Configure git
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-    
-    - name: Determine version
-      id: version
-      run: |
-        if [ "${{ github.event.inputs.version-type }}" = "auto" ]; then
-          VERSION=$(svu next --strip-prefix)
-        else
-          CURRENT=$(svu current --strip-prefix 2>/dev/null || echo "0.0.0")
-          case "${{ github.event.inputs.version-type }}" in
-            patch) VERSION=$(svu next --strip-prefix) ;;
-            minor) VERSION=$(echo $CURRENT | awk -F. '{print $1"."($2+1)".0"}') ;;
-            major) VERSION=$(echo $CURRENT | awk -F. '{print ($1+1)".0.0"}') ;;
-          esac
-        fi
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "📦 Creating release: $VERSION"
-    
-    - name: Run validation
-      run: |
-        task release:validate
-    
-    - name: Login to GitHub Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Create release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        # Override version for manual releases
-        if [ "${{ github.event.inputs.version-type }}" != "auto" ]; then
-          git tag ${{ steps.version.outputs.version }}
-        fi
-        task release:release
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker system prune -af
+          df -h
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install task runner
+        run: |
+          sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+      - name: Install semantic version tool
+        run: |
+          curl -L https://github.com/caarlos0/svu/releases/download/v1.12.0/svu_1.12.0_linux_amd64.tar.gz | tar xz
+          sudo mv svu /usr/local/bin/
+      - name: Setup development environment
+        run: |
+          task setup
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event.inputs.version-type }}" = "auto" ]; then
+            VERSION=$(svu next --strip-prefix)
+          else
+            CURRENT=$(svu current --strip-prefix 2>/dev/null || echo "0.0.0")
+            case "${{ github.event.inputs.version-type }}" in
+              patch) VERSION=$(svu next --strip-prefix) ;;
+              minor) VERSION=$(echo $CURRENT | awk -F. '{print $1"."($2+1)".0"}') ;;
+              major) VERSION=$(echo $CURRENT | awk -F. '{print ($1+1)".0.0"}') ;;
+            esac
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Creating release: $VERSION"
+      - name: Run validation
+        run: |
+          task release:validate
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |-
+          # Override version for manual releases
+          if [ "${{ github.event.inputs.version-type }}" != "auto" ]; then
+            git tag ${{ steps.version.outputs.version }}
+          fi
+          task release:release

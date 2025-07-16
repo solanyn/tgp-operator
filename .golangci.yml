@@ -1,15 +1,12 @@
+---
 run:
   timeout: 5m
   issues-exit-code: 1
   tests: true
   modules-download-mode: readonly
-
 linters-settings:
   gci:
-    sections:
-      - standard
-      - default
-      - prefix(github.com/solanyn/tgp-operator)
+    sections: [standard, default, prefix(github.com/solanyn/tgp-operator)]
   goconst:
     min-len: 2
     min-occurrences: 2
@@ -20,24 +17,15 @@ linters-settings:
       - opinionated
       - performance
       - style
-    disabled-checks:
-      - dupImport
-      - ifElseChain
-      - octalLiteral
-      - whyNoLint
+    disabled-checks: [dupImport, ifElseChain, octalLiteral, whyNoLint]
   gocyclo:
     min-complexity: 15
   goimports:
     local-prefixes: github.com/solanyn/tgp-operator
   mnd:
-    checks:
-      - argument
-      - case
-      - condition
-      - return
+    checks: [argument, case, condition, return]
   govet:
-    enable:
-      - shadow
+    enable: [shadow]
   lll:
     line-length: 140
   misspell:
@@ -46,7 +34,6 @@ linters-settings:
     allow-unused: false
     require-explanation: false
     require-specific: false
-
 linters:
   disable-all: true
   enable:
@@ -81,17 +68,12 @@ linters:
     - unparam
     - unused
     - whitespace
-
 issues:
   exclude-rules:
     - path: zz_generated.deepcopy.go
-      linters:
-        - lll
+      linters: [lll]
     - path: _test\.go
-      linters:
-        - mnd
-    - linters:
-        - lll
-      source: "^//\\+kubebuilder"
-
+      linters: [mnd]
+    - linters: [lll]
+      source: ^//\+kubebuilder
   exclude-use-default: false

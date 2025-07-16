@@ -1,37 +1,34 @@
-version: "3"
-
+---
+version: '3'
 vars:
   CHART_DIR: chart
   OUTPUT_DIR: dist/chart
-
 tasks:
   crd:
     desc: Sync generated CRD to Helm chart
     cmds:
       - task: :dev:generate
       - cp config/crd/bases/tgp.io_gpurequests.yaml {{.CHART_DIR}}/templates/crd.yaml
-
   template:
     desc: Generate Helm templates for testing
     deps: [crd]
     cmds:
       - mkdir -p {{.OUTPUT_DIR}}
-      - helm template tgp-operator {{.CHART_DIR}} --output-dir {{.OUTPUT_DIR}} --namespace tgp-system
-
+      - helm template tgp-operator {{.CHART_DIR}} --output-dir {{.OUTPUT_DIR}} --namespace
+        tgp-system
   validate:
     desc: Validate Helm chart and templates
     cmds:
       - helm lint {{.CHART_DIR}}
       - task: template
       - task: _validate-yaml
-
   _validate-yaml:
     desc: Validate YAML syntax and Kubernetes schemas
     internal: true
     cmds:
       - task: _extract-crd-schema
-      - kubeconform -strict -summary -verbose -schema-location default -schema-location 'schemas/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' {{.OUTPUT_DIR}}/tgp-operator/templates/*.yaml
-
+      - kubeconform -strict -summary -verbose -schema-location default -schema-location
+        'schemas/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' {{.OUTPUT_DIR}}/tgp-operator/templates/*.yaml
   _extract-crd-schema:
     desc: Extract CRD schema for validation
     internal: true
@@ -43,13 +40,10 @@ tasks:
           yq eval '.spec.versions[0].schema.openAPIV3Schema' {{.OUTPUT_DIR}}/tgp-operator/templates/crd.yaml > schemas/GPURequest_v1.json
           echo "Extracted CRD schema to schemas/GPURequest_v1.json"
         fi
-
   package:
     desc: Package Helm chart
     deps: [validate]
-    cmds:
-      - helm package {{.CHART_DIR}} --destination dist/
-
+    cmds: ['helm package {{.CHART_DIR}} --destination dist/']
   push-oci:
     desc: Push Helm chart as OCI artifact to GHCR
     deps: [validate]
@@ -63,20 +57,18 @@ tasks:
           fi
       CHART_REPO: oci://ghcr.io/solanyn/charts
     cmds:
-      - helm package {{.CHART_DIR}} --version {{.VERSION}} --app-version {{.VERSION}} --destination dist/
+      - helm package {{.CHART_DIR}} --version {{.VERSION}} --app-version {{.VERSION}}
+        --destination dist/
       - helm push dist/tgp-operator-{{.VERSION}}.tgz {{.CHART_REPO}}
       - echo "Pushed chart {{.CHART_REPO}}/tgp-operator:{{.VERSION}}"
-
   install:
     desc: Install chart to current cluster
     cmds:
-      - helm upgrade --install tgp-operator {{.CHART_DIR}} --namespace tgp-system --create-namespace
-
+      - helm upgrade --install tgp-operator {{.CHART_DIR}} --namespace tgp-system
+        --create-namespace
   uninstall:
     desc: Uninstall chart from current cluster
-    cmds:
-      - helm uninstall tgp-operator --namespace tgp-system
-
+    cmds: [helm uninstall tgp-operator --namespace tgp-system]
   debug:
     desc: Debug chart templates
     cmds:

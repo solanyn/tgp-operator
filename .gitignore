@@ -14,6 +14,9 @@ bin/
 dist/
 schemas/
 
+# Generated CRDs
+chart/templates/crd.yaml
+
 # Test coverage
 *.cover
 coverage.out

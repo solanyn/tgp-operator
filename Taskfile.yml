@@ -1,8 +1,7 @@
+---
 version: '3'
-
 # Task runner for local development - aligned with CI workflows
 # CI uses the same structure but with GitHub Actions native tools
-
 includes:
   dev: .taskfiles/dev/Taskfile.yml
   test: .taskfiles/test/Taskfile.yml
@@ -11,7 +10,6 @@ includes:
   release: .taskfiles/release/Taskfile.yml
   lint: .taskfiles/lint/Taskfile.yml
   security: .taskfiles/security/Taskfile.yml
-
 tasks:
   default:
     desc: Show available tasks
@@ -23,17 +21,14 @@ tasks:
     desc: Quick development cycle (alias for 'dev')
     cmds:
       - task: dev
-
   t:
     desc: Run unit tests (alias for 'test:unit')
     cmds:
       - task: test:unit
-
   f:
     desc: Fix formatting (alias for 'fix')
     cmds:
       - task: fix
-
   c:
     desc: Quick check (alias for 'check')
     cmds:
@@ -58,12 +53,10 @@ tasks:
         echo "Generated .env file with API keys from 1Password"
         echo "Run: source .env"
         echo "Then: go test -tags=real ./test/real/..."
-
   test:providers:
     desc: Test providers with real API keys from 1Password (direct injection)
     cmds:
       - op run --env-file=.env.template -- go test -tags=real ./test/real/...
-
   test:provider:
     desc: Test a specific provider interactively with 1Password secrets (direct injection)
     vars:
@@ -81,7 +74,6 @@ tasks:
         else
           op run --env-file=.env.template -- go run cmd/test-providers/main.go {{.CLI_ARGS}}
         fi
-
   help:
     desc: Show common development workflows
     cmds:
@@ -113,23 +105,19 @@ tasks:
     deps: [dev:generate]
     cmds:
       - task: dev:build
-
   test:
     desc: Run all tests (unit + integration)
     cmds:
       - task: test:unit
       - task: test:integration
-
   lint:
     desc: Run all linters
     cmds:
       - task: lint:all
-
   lint:fix:
     desc: Auto-fix all formatting issues
     cmds:
       - task: lint:fix-all
-
   security:
     desc: Run security scans
     cmds:
@@ -145,7 +133,6 @@ tasks:
       - task: security
       - task: docker:build
       - echo "All CI checks passed!"
-
   ci:pr:
     desc: Run PR checks locally before pushing
     cmds:
@@ -163,12 +150,10 @@ tasks:
       - task: dev:build
       - task: test:unit
       - echo "Development cycle complete!"
-
   fix:
     desc: Quick fix for common issues (formatting, imports, etc)
     cmds:
       - task: lint:fix
-
   check:
     desc: Quick check before committing
     cmds:
@@ -183,7 +168,6 @@ tasks:
       - task: test:setup-talos
       - task: chart:install
       - echo "Deployed to local Talos cluster"
-
   deploy:talos:
     desc: Deploy to existing Talos cluster
     cmds:

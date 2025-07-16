@@ -1,0 +1,10 @@
+[yamlfix]
+line_length = 120
+sequence_style = "block_style"
+none_representation = "null"
+preserve_quotes = false
+whitelines = 1
+flow_style_mapping = false
+flow_style_sequence = false
+quote_basic_values = true
+quote_representation = "\""

@@ -1,5 +1,5 @@
-version: "3"
-
+---
+version: '3'
 tasks:
   all:
     desc: Run all linting and formatting checks
@@ -9,52 +9,36 @@ tasks:
       - task: markdown
       - task: shell
       - task: github-actions
-
   go:
     desc: Lint and format Go code
-    cmds:
-      - golangci-lint run ./...
-      - gofumpt -l -d .
-
+    cmds: [golangci-lint run ./..., gofumpt -l -d .]
   go-fix:
     desc: Fix Go code formatting
-    cmds:
-      - gofumpt -l -w .
-      - go mod tidy
-
+    cmds: [gofumpt -l -w ., go mod tidy]
   yaml:
-    desc: Lint and format YAML files
+    desc: Check YAML files for compliance
     cmds:
-      - yamllint .
-      - yamlfmt -lint .
-
+      - mise x python -- yamlfix --config-file .yamlfix.toml --exclude "chart/templates/*"
+        --check .
   yaml-fix:
     desc: Fix YAML formatting
     cmds:
-      - yamlfmt .
-
+      - mise x python -- yamlfix --config-file .yamlfix.toml --exclude "chart/templates/*"
+        .
   markdown:
     desc: Lint Markdown files
-    cmds:
-      - markdownlint-cli **/*.md
-
+    cmds: [markdownlint-cli **/*.md]
   shell:
     desc: Lint shell scripts
     cmds:
       - find . -name "*.sh" -exec shellcheck {} +
       - find . -name "*.sh" -exec shfmt -d {} +
-
   shell-fix:
     desc: Fix shell script formatting
-    cmds:
-      - find . -name "*.sh" -exec shfmt -w {} +
-
-
+    cmds: ['find . -name "*.sh" -exec shfmt -w {} +']
   github-actions:
     desc: Lint GitHub Actions workflows
-    cmds:
-      - actionlint
-
+    cmds: [actionlint]
   fix-all:
     desc: Auto-fix all formatting issues
     cmds:

@@ -1,37 +1,35 @@
-version: "3"
-
+---
+version: '3'
 vars:
   IMAGE_REPO: ghcr.io/solanyn/tgp-operator
   IMAGE_TAG: latest
-
 tasks:
   build:
     desc: Build container image
     cmds:
       - docker build -t {{.IMAGE_REPO}}:{{.IMAGE_TAG}} .
       - docker tag {{.IMAGE_REPO}}:{{.IMAGE_TAG}} {{.IMAGE_REPO}}:latest
-
   build-multiplatform:
     desc: Build multi-platform container image
     cmds:
       - docker buildx create --use --name multiplatform || true
-      - docker buildx build --platform linux/amd64,linux/arm64 -t {{.IMAGE_REPO}}:{{.IMAGE_TAG}} --load .
+      - docker buildx build --platform linux/amd64,linux/arm64 -t {{.IMAGE_REPO}}:{{.IMAGE_TAG}}
+        --load .
       - docker tag {{.IMAGE_REPO}}:{{.IMAGE_TAG}} {{.IMAGE_REPO}}:latest
-
   push:
     desc: Push container image to registry
     deps: [build]
     cmds:
       - docker push {{.IMAGE_REPO}}:{{.IMAGE_TAG}}
       - docker push {{.IMAGE_REPO}}:latest
-
   push-multiplatform:
     desc: Push multi-platform container image to registry
     deps: [build-multiplatform]
     cmds:
-      - docker buildx build --platform linux/amd64,linux/arm64 -t {{.IMAGE_REPO}}:{{.IMAGE_TAG}} --push .
-      - docker buildx build --platform linux/amd64,linux/arm64 -t {{.IMAGE_REPO}}:latest --push .
-
+      - docker buildx build --platform linux/amd64,linux/arm64 -t {{.IMAGE_REPO}}:{{.IMAGE_TAG}}
+        --push .
+      - docker buildx build --platform linux/amd64,linux/arm64 -t {{.IMAGE_REPO}}:latest
+        --push .
   push-release:
     desc: Push container image with semantic version tag
     deps: [build-multiplatform]
@@ -44,20 +42,20 @@ tasks:
             echo "0.1.0"
           fi
     cmds:
-      - docker buildx build --platform linux/amd64,linux/arm64 -t {{.IMAGE_REPO}}:{{.VERSION}} --push .
-      - docker buildx build --platform linux/amd64,linux/arm64 -t {{.IMAGE_REPO}}:v{{.VERSION}} --push .
-      - docker buildx build --platform linux/amd64,linux/arm64 -t {{.IMAGE_REPO}}:latest --push .
+      - docker buildx build --platform linux/amd64,linux/arm64 -t {{.IMAGE_REPO}}:{{.VERSION}}
+        --push .
+      - docker buildx build --platform linux/amd64,linux/arm64 -t {{.IMAGE_REPO}}:v{{.VERSION}}
+        --push .
+      - docker buildx build --platform linux/amd64,linux/arm64 -t {{.IMAGE_REPO}}:latest
+        --push .
       - echo "Pushed multi-platform {{.IMAGE_REPO}}:{{.VERSION}} and {{.IMAGE_REPO}}:v{{.VERSION}}"
-
   test:
     desc: Test container image
     deps: [build]
-    cmds:
-      - docker run --rm {{.IMAGE_REPO}}:{{.IMAGE_TAG}} --help
-
+    cmds: ['docker run --rm {{.IMAGE_REPO}}:{{.IMAGE_TAG}} --help']
   scan:
     desc: Scan container for vulnerabilities
     deps: [build]
     cmds:
-      - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock 
-        aquasec/trivy image {{.IMAGE_REPO}}:{{.IMAGE_TAG}}
+      - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy
+        image {{.IMAGE_REPO}}:{{.IMAGE_TAG}}

@@ -1,3 +1,4 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -14,21 +15,21 @@ spec:
     spec:
       serviceAccountName: tgp-operator
       containers:
-      - name: manager
-        image: tgp-operator:e2e-test
-        imagePullPolicy: Never
-        env:
-        - name: ENABLE_MOCK_PROVIDERS
-          value: "true"
-        - name: MOCK_PROVIDER_DELAY
-          value: "2s"
-        resources:
-          limits:
-            cpu: 500m
-            memory: 128Mi
-          requests:
-            cpu: 100m
-            memory: 64Mi
+        - name: manager
+          image: tgp-operator:e2e-test
+          imagePullPolicy: Never
+          env:
+            - name: ENABLE_MOCK_PROVIDERS
+              value: 'true'
+            - name: MOCK_PROVIDER_DELAY
+              value: 2s
+          resources:
+            limits:
+              cpu: 500m
+              memory: 128Mi
+            requests:
+              cpu: 100m
+              memory: 64Mi
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -41,18 +42,18 @@ kind: ClusterRole
 metadata:
   name: tgp-operator
 rules:
-- apiGroups: [""]
-  resources: ["events"]
-  verbs: ["create", "patch"]
-- apiGroups: ["tgp.io"]
-  resources: ["gpurequests"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-- apiGroups: ["tgp.io"]
-  resources: ["gpurequests/status"]
-  verbs: ["get", "update", "patch"]
-- apiGroups: ["tgp.io"]
-  resources: ["gpurequests/finalizers"]
-  verbs: ["update"]
+  - apiGroups: ['']
+    resources: [events]
+    verbs: [create, patch]
+  - apiGroups: [tgp.io]
+    resources: [gpurequests]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [tgp.io]
+    resources: [gpurequests/status]
+    verbs: [get, update, patch]
+  - apiGroups: [tgp.io]
+    resources: [gpurequests/finalizers]
+    verbs: [update]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -63,6 +64,6 @@ roleRef:
   kind: ClusterRole
   name: tgp-operator
 subjects:
-- kind: ServiceAccount
-  name: tgp-operator
-  namespace: tgp-system
+  - kind: ServiceAccount
+    name: tgp-operator
+    namespace: tgp-system

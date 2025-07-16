@@ -1,76 +1,74 @@
+---
 name: Security Scan
-
 on:
   pull_request:
     branches: [main]
   push:
     branches: [main]
   workflow_call:
-
 jobs:
   gosec:
     name: Go Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
         with:
-          go-version-file: "go.mod"
+          go-version-file: go.mod
           cache: true
-
       - name: Run Gosec Security Scanner
         uses: securego/gosec@master
         with:
-          args: "-no-fail -fmt sarif -out gosec-results.sarif ./..."
-
+          args: -no-fail -fmt sarif -out gosec-results.sarif ./...
       - name: Upload SARIF file
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: gosec-results.sarif
-
   trivy-code:
     name: Trivy Code Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
-
       - name: Run Trivy vulnerability scanner in repo mode
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: "fs"
-          scan-ref: "."
-          format: "sarif"
-          output: "trivy-code-results.sarif"
-          severity: "CRITICAL,HIGH"
-
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-code-results.sarif
+          severity: CRITICAL,HIGH
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: "trivy-code-results.sarif"
-
+          sarif_file: trivy-code-results.sarif
   trivy-container:
     name: Trivy Container Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
-
       - name: Build container image
         run: |
           docker build -t tgp-operator:scan .
-
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: "tgp-operator:scan"
-          format: "sarif"
-          output: "trivy-container-results.sarif"
-          severity: "CRITICAL,HIGH"
-
+          image-ref: tgp-operator:scan
+          format: sarif
+          output: trivy-container-results.sarif
+          severity: CRITICAL,HIGH
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: "trivy-container-results.sarif"
+          sarif_file: trivy-container-results.sarif

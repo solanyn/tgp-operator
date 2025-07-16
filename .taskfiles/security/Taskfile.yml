@@ -1,5 +1,5 @@
+---
 version: '3'
-
 tasks:
   all:
     desc: Run all security scans
@@ -9,35 +9,27 @@ tasks:
       - task: trivy-container
       - task: dependencies
       - task: licenses
-
   gosec:
     desc: Run Go security scanner
     cmds:
       - gosec -fmt sarif -out gosec-results.sarif ./... || true
       - gosec ./...
-
   trivy-code:
     desc: Scan code for vulnerabilities
-    cmds:
-      - trivy fs --severity HIGH,CRITICAL .
-
+    cmds: ['trivy fs --severity HIGH,CRITICAL .']
   trivy-container:
     desc: Scan container image for vulnerabilities
     cmds:
       - docker build -t tgp-operator:security-scan .
       - trivy image --severity HIGH,CRITICAL tgp-operator:security-scan
-
   dependencies:
     desc: Check for vulnerable dependencies
-    cmds:
-      - go list -json -deps ./... | nancy sleuth
-
+    cmds: [go list -json -deps ./... | nancy sleuth]
   licenses:
     desc: Check dependency licenses
     cmds:
       - go-licenses check ./... --disallowed_types=forbidden,restricted || true
       - echo "Review any license issues above"
-
   fix:
     desc: Auto-fix security issues where possible
     cmds:

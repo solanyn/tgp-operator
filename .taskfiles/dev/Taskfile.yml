@@ -1,17 +1,13 @@
+---
 version: '3'
-
 tasks:
-
   install-codegen:
     desc: Install code generation tools
     cmds:
       - mise exec -- go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
       - mise exec -- go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
       - mise exec -- go install github.com/Khan/genqlient@latest
-    status:
-      - test -f bin/oapi-codegen
-      - test -f bin/genqlient
-
+    status: [test -f bin/oapi-codegen, test -f bin/genqlient]
   generate-providers:
     desc: Generate provider API clients from OpenAPI/GraphQL specs
     deps: [install-codegen]
@@ -19,7 +15,6 @@ tasks:
       - task: generate-lambda-client
       - task: generate-paperspace-client
       - task: generate-runpod-client
-
   generate-lambda-client:
     desc: Generate Lambda Labs client from converted OpenAPI spec
     deps: [install-codegen]
@@ -27,35 +22,28 @@ tasks:
       - curl -s https://cloud.lambda.ai/api/v1/openapi.json > /tmp/lambda-openapi-3.1.json
       - mise exec -- openapi-down-convert -i /tmp/lambda-openapi-3.1.json -o /tmp/lambda-openapi-3.0-converted.json
       - mkdir -p pkg/providers/lambdalabs/api
-      - bin/oapi-codegen -generate "types,client" -package "api" -exclude-tags "Filesystems,SSH Keys" -o pkg/providers/lambdalabs/api/generated.go /tmp/lambda-openapi-3.0-converted.json
-    sources:
-      - https://cloud.lambda.ai/api/v1/openapi.json
-    generates:
-      - pkg/providers/lambdalabs/api/generated.go
-
+      - bin/oapi-codegen -generate "types,client" -package "api" -exclude-tags "Filesystems,SSH
+        Keys" -o pkg/providers/lambdalabs/api/generated.go /tmp/lambda-openapi-3.0-converted.json
+    sources: [https://cloud.lambda.ai/api/v1/openapi.json]
+    generates: [pkg/providers/lambdalabs/api/generated.go]
   generate-paperspace-client:
     desc: Generate Paperspace client from OpenAPI spec
     deps: [install-codegen]
     cmds:
       - mkdir -p pkg/providers/paperspace/api
-      - bin/oapi-codegen -generate "types,client" -package "api" -o pkg/providers/paperspace/api/generated.go https://api.paperspace.com/v1/openapi.json
-    sources:
-      - https://api.paperspace.com/v1/openapi.json
-    generates:
-      - pkg/providers/paperspace/api/generated.go
-
+      - bin/oapi-codegen -generate "types,client" -package "api" -o pkg/providers/paperspace/api/generated.go
+        https://api.paperspace.com/v1/openapi.json
+    sources: [https://api.paperspace.com/v1/openapi.json]
+    generates: [pkg/providers/paperspace/api/generated.go]
   generate-runpod-client:
     desc: Generate RunPod GraphQL client
     deps: [install-codegen]
-    cmds:
-      - cd pkg/providers/runpod && ../../../bin/genqlient
+    cmds: [cd pkg/providers/runpod && ../../../bin/genqlient]
     sources:
       - pkg/providers/runpod/genqlient.yaml
       - pkg/providers/runpod/queries.graphql
       - pkg/providers/runpod/schema.graphql
-    generates:
-      - pkg/providers/runpod/generated.go
-
+    generates: [pkg/providers/runpod/generated.go]
   generate:
     desc: Generate code (deepcopy methods, CRDs, and provider clients)
     deps: [install-codegen]
@@ -63,20 +51,13 @@ tasks:
       - bin/controller-gen object paths="./pkg/api/..."
       - bin/controller-gen crd paths="./pkg/api/..." output:crd:artifacts:config=config/crd/bases
       - task: generate-providers
-
   build:
     desc: Build the manager binary
     deps: [generate]
-    cmds:
-      - go build -o bin/manager ./cmd/manager
-
+    cmds: [go build -o bin/manager ./cmd/manager]
   lint:
     desc: Run linters
-    cmds:
-      - golangci-lint run ./...
-
+    cmds: [golangci-lint run ./...]
   clean:
     desc: Clean build artifacts
-    cmds:
-      - rm -rf bin/
-      - go clean -cache
+    cmds: [rm -rf bin/, go clean -cache]
