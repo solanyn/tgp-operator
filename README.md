@@ -6,7 +6,7 @@ Addresses intermittent GPU compute needs by provisioning instances on-demand fro
 
 ## Features
 
-- **Multi-cloud support** - RunPod, Lambda Labs, Paperspace with real API integration
+- **Multi-cloud support** - RunPod, Lambda Labs and Paperspace
 - **Cost optimization** - Automatic provider selection based on real-time pricing
 - **Secure credentials** - 1Password CLI integration for secret management
 - **Lifecycle management** - Automated provisioning, configuration and cleanup
@@ -15,30 +15,23 @@ Addresses intermittent GPU compute needs by provisioning instances on-demand fro
 - **Provider validation** - Real API credential verification and connectivity testing
 - **Interactive testing** - CLI tool for testing provider APIs and pricing
 
-## Quick Start
+## Installation
 
 ### Prerequisites
 
-- Talos Linux Kubernetes cluster with cluster-admin access
-- Cloud provider API credentials (one or more supported providers)
-- WireGuard configuration for secure networking
+This operator requires significant infrastructure setup:
 
-### Installation
+- **Talos Kubernetes cluster** - See [Talos documentation](https://www.talos.dev/latest/introduction/getting-started/) for cluster setup
+- **WireGuard server** - For secure node-to-cluster networking (VPS, homelab, or cloud instance)
+- **Cloud provider API keys** - From supported providers (RunPod, Lambda Labs, Paperspace)
+- **Network configuration** - Proper routing and firewall rules
 
-#### Option 1: OCI Registry (Recommended)
+### Install Operator
 
-```bash
-# Install directly from OCI registry
-helm install tgp-operator oci://ghcr.io/solanyn/charts/tgp-operator \
-  --version 0.0.1 \
-  --namespace tgp-system \
-  --create-namespace
-```
-
-#### Option 2: Helm Chart (OCI Registry)
+Once your infrastructure is ready:
 
 ```bash
-# Install the operator from OCI registry
+# Install the operator
 helm install tgp-operator oci://ghcr.io/solanyn/charts/tgp-operator \
   --namespace tgp-system \
   --create-namespace
@@ -55,6 +48,8 @@ kubectl create secret generic tgp-secret \
   --from-literal=PAPERSPACE_API_KEY=your-paperspace-key \
   -n tgp-system
 ```
+
+> **Note**: For complete setup instructions including Talos cluster deployment, WireGuard server configuration, and network setup, see [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ### Usage
 
