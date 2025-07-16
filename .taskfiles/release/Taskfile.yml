@@ -1,20 +1,22 @@
 version: "3"
 
+vars:
+  VERSION:
+    sh: cat VERSION 2>/dev/null || echo "0.0.1"
+
 tasks:
   release:
     desc: Create a full release (container + chart + GitHub release)
-    vars:
-      VERSION:
-        sh: svu next --strip-prefix
+    prompt: "This will create and publish release v{{.VERSION}}. Are you sure?"
     cmds:
-      - echo "Creating release {{.VERSION}}"
+      - "echo 'Creating release v{{.VERSION}}'"
       - task: validate
+      - task: sync-versions
       - task: tag
-      - task: changelog
       - task: docker:push-release
       - task: chart:push-oci
       - task: github-release
-      - echo "Release {{.VERSION}} complete!"
+      - "echo 'Release v{{.VERSION}} complete!'"
 
   validate:
     desc: Run all validation before release
@@ -23,54 +25,61 @@ tasks:
       - task: test:unit
       - task: chart:validate
 
+  sync-versions:
+    desc: Update all version references to match VERSION file
+    cmds:
+      - "echo 'Syncing version {{.VERSION}} to all files...'"
+      - "yq -i '.version = \"{{.VERSION}}\"' chart/Chart.yaml"
+      - "yq -i '.appVersion = \"{{.VERSION}}\"' chart/Chart.yaml" 
+      - "sed -i '' 's/--version [0-9]\\+\\.[0-9]\\+\\.[0-9]\\+/--version {{.VERSION}}/g' README.md"
+      - "echo 'All files updated to version {{.VERSION}}'"
+
   tag:
     desc: Create and push git tag for current version
-    vars:
-      VERSION:
-        sh: svu next --strip-prefix
+    prompt: "This will create git tag v{{.VERSION}} and push to GitHub. Continue?"
+    preconditions:
+      - sh: test -f VERSION
+        msg: "VERSION file not found. Create it with: echo '0.0.1' > VERSION"
     cmds:
-      - git tag {{.VERSION}}
-      - git push origin {{.VERSION}}
-      - echo "Tagged and pushed {{.VERSION}}"
-
-  changelog:
-    desc: Generate changelog for current release
-    vars:
-      VERSION:
-        sh: svu current --strip-prefix
-    cmds:
-      - git-chglog --output CHANGELOG.md
-      - echo "Generated CHANGELOG.md"
+      - git add VERSION chart/Chart.yaml README.md
+      - "git commit -m 'chore: bump version to v{{.VERSION}}' || echo 'No changes to commit'"
+      - "git tag v{{.VERSION}}"
+      - "git push origin main"
+      - "git push origin v{{.VERSION}}"
+      - "echo 'Tagged and pushed v{{.VERSION}}'"
 
   github-release:
-    desc: Create GitHub release with changelog
+    desc: Create GitHub release with simple changelog
+    prompt: "This will create GitHub release v{{.VERSION}}. Continue?"
     vars:
-      VERSION:
-        sh: svu current --strip-prefix
       CHANGELOG:
-        sh: git-chglog --template .chglog/CHANGELOG.tpl.md {{.VERSION}}
+        sh: git log --oneline $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~10")..HEAD --pretty=format:"- %s" 2>/dev/null || echo "Initial release"
     preconditions:
       - sh: command -v gh
         msg: "GitHub CLI not found. Install with: brew install gh && gh auth login"
     cmds:
-      - gh release create {{.VERSION}} --title "Release {{.VERSION}}" --notes "{{.CHANGELOG}}"
+      - "gh release create v{{.VERSION}} --title 'Release v{{.VERSION}}' --notes '{{.CHANGELOG}}'"
 
-  next-version:
-    desc: Show next semantic version
-    cmds:
-      - svu next --strip-prefix
-
-  preview-changelog:
-    desc: Preview changelog for next release
+  set-version:
+    desc: Set new version in VERSION file
     vars:
-      NEXT_VERSION:
-        sh: svu next --strip-prefix
+      NEW_VERSION: '{{.NEW_VERSION | default ""}}'
+    preconditions:
+      - sh: test -n "{{.NEW_VERSION}}"
+        msg: "Usage: task release:set-version NEW_VERSION=x.y.z"
     cmds:
-      - echo "Changelog preview for {{.NEXT_VERSION}}:"
-      - git-chglog --next-tag {{.NEXT_VERSION}} --template .chglog/CHANGELOG.tpl.md {{.NEXT_VERSION}}
+      - "echo '{{.NEW_VERSION}}' > VERSION"
+      - "echo 'Version set to {{.NEW_VERSION}}'"
+      - "echo 'Run task release:sync-versions to update all files'"
 
-  autorelease:
-    desc: Trigger GitHub Actions release workflow
+  current-version:
+    desc: Show current version from VERSION file
     cmds:
-      - gh workflow run release.yml
-      - echo "Release workflow triggered! Check with gh run list -w release.yml"
+      - "echo 'Current version: {{.VERSION}}'"
+
+  prepare-release:
+    desc: Prepare for release (sync versions but don't tag/release)
+    cmds:
+      - task: validate
+      - task: sync-versions
+      - "echo 'Ready for release v{{.VERSION}}. Run task release:release when ready.'"

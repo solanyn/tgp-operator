@@ -1,20 +1,11 @@
 apiVersion: v2
 name: tgp-operator
-description: Kubernetes operator for ephemeral GPU provisioning across multiple cloud providers
+description: Kubernetes operator for ephemeral Talos Linux GPU provisioning across multiple cloud providers
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 0.0.1
+appVersion: "0.0.1"
 home: https://github.com/solanyn/tgp-operator
 sources:
   - https://github.com/solanyn/tgp-operator
 maintainers:
   - name: tgp-operator
-keywords:
-  - gpu
-  - kubernetes
-  - operator
-  - cloud
-  - talos
-  - prometheus
-  - monitoring
-  - multi-cloud

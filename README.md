@@ -41,7 +41,7 @@ helm install tgp-operator tgp-operator/tgp-operator \
 ```bash
 # Install directly from OCI registry
 helm install tgp-operator oci://ghcr.io/solanyn/charts/tgp-operator \
-  --version 0.1.0 \
+  --version 0.0.1 \
   --namespace tgp-system \
   --create-namespace
 ```
