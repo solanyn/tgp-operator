@@ -62,7 +62,7 @@ kubectl create secret generic tgp-secret \
 
 #### Basic GPU Request
 ```yaml
-apiVersion: tgp.solanyn.com/v1
+apiVersion: tgp.io/v1
 kind: GPURequest
 metadata:
   name: my-gpu-workload
