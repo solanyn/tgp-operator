@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Khan/genqlient/graphql"
+
 	"github.com/solanyn/tgp-operator/pkg/providers"
 )
 

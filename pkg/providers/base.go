@@ -171,7 +171,7 @@ func IsRetriableError(err error) (bool, RetriableErrorType) {
 
 	// Network errors
 	if netErr, ok := err.(net.Error); ok {
-		if netErr.Timeout() || netErr.Temporary() {
+		if netErr.Timeout() {
 			return true, RetriableErrorNetwork
 		}
 	}

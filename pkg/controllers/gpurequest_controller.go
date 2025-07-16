@@ -68,7 +68,25 @@ func (r *GPURequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
-	// Record metrics for this reconciliation
+	// Setup metrics recording
+	provider := r.determineMetricsProvider(&gpuRequest)
+	defer r.recordReconciliationMetrics(start, provider, &gpuRequest)
+
+	// Handle deletion
+	if gpuRequest.DeletionTimestamp != nil {
+		return r.handleDeletion(ctx, &gpuRequest, log)
+	}
+
+	// Ensure finalizer is present
+	if result, err := r.ensureFinalizer(ctx, &gpuRequest, log); result != nil {
+		return *result, err
+	}
+
+	return r.routeByPhase(ctx, &gpuRequest, log)
+}
+
+// determineMetricsProvider determines the provider name for metrics recording
+func (r *GPURequestReconciler) determineMetricsProvider(gpuRequest *tgpv1.GPURequest) string {
 	provider := gpuRequest.Status.SelectedProvider
 	if provider == "" {
 		provider = gpuRequest.Spec.Provider
@@ -76,43 +94,45 @@ func (r *GPURequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if provider == "" {
 		provider = "unknown"
 	}
+	return provider
+}
 
-	defer func() {
-		if r.Metrics != nil {
-			duration := time.Since(start).Seconds()
-			r.Metrics.RecordGPURequestDuration(provider, gpuRequest.Spec.GPUType, string(gpuRequest.Status.Phase), duration)
-		}
-	}()
-
-	// Handle deletion
-	if gpuRequest.DeletionTimestamp != nil {
-		return r.handleDeletion(ctx, &gpuRequest, log)
+// recordReconciliationMetrics records timing metrics for the reconciliation
+func (r *GPURequestReconciler) recordReconciliationMetrics(start time.Time, provider string, gpuRequest *tgpv1.GPURequest) {
+	if r.Metrics != nil {
+		duration := time.Since(start).Seconds()
+		r.Metrics.RecordGPURequestDuration(provider, gpuRequest.Spec.GPUType, string(gpuRequest.Status.Phase), duration)
 	}
+}
 
-	// Add finalizer if not present
-	if !controllerutil.ContainsFinalizer(&gpuRequest, FinalizerName) {
-		controllerutil.AddFinalizer(&gpuRequest, FinalizerName)
-		if err := r.Update(ctx, &gpuRequest); err != nil {
+// ensureFinalizer adds a finalizer if not present, returns result if requeue needed
+func (r *GPURequestReconciler) ensureFinalizer(ctx context.Context, gpuRequest *tgpv1.GPURequest, log logr.Logger) (*ctrl.Result, error) {
+	if !controllerutil.ContainsFinalizer(gpuRequest, FinalizerName) {
+		controllerutil.AddFinalizer(gpuRequest, FinalizerName)
+		if err := r.Update(ctx, gpuRequest); err != nil {
 			log.Error(err, "failed to add finalizer")
-			return ctrl.Result{}, err
+			return &ctrl.Result{}, err
 		}
-		return ctrl.Result{Requeue: true}, nil
+		return &ctrl.Result{Requeue: true}, nil
 	}
+	return nil, nil
+}
 
-	// Handle reconciliation based on current phase
+// routeByPhase handles reconciliation based on current phase
+func (r *GPURequestReconciler) routeByPhase(ctx context.Context, gpuRequest *tgpv1.GPURequest, log logr.Logger) (ctrl.Result, error) {
 	switch gpuRequest.Status.Phase {
 	case "":
-		return r.handlePending(ctx, &gpuRequest, log)
+		return r.handlePending(ctx, gpuRequest, log)
 	case tgpv1.GPURequestPhasePending:
-		return r.handlePending(ctx, &gpuRequest, log)
+		return r.handlePending(ctx, gpuRequest, log)
 	case tgpv1.GPURequestPhaseProvisioning:
-		return r.handleProvisioning(ctx, &gpuRequest, log)
+		return r.handleProvisioning(ctx, gpuRequest, log)
 	case tgpv1.GPURequestPhaseBooting, tgpv1.GPURequestPhaseJoining:
-		return r.handleProvisioning(ctx, &gpuRequest, log)
+		return r.handleProvisioning(ctx, gpuRequest, log)
 	case tgpv1.GPURequestPhaseReady:
-		return r.handleRunning(ctx, &gpuRequest, log)
+		return r.handleRunning(ctx, gpuRequest, log)
 	case tgpv1.GPURequestPhaseFailed:
-		return r.handleFailed(ctx, &gpuRequest, log)
+		return r.handleFailed(ctx, gpuRequest, log), nil
 	case tgpv1.GPURequestPhaseTerminating:
 		return ctrl.Result{RequeueAfter: TerminatingRequeue}, nil
 	default:
@@ -239,7 +259,7 @@ func (r *GPURequestReconciler) handleRunning(ctx context.Context, gpuRequest *tg
 }
 
 // updateStatusWithRetry updates the GPURequest status with retry logic to handle resource conflicts
-func (r *GPURequestReconciler) updateStatusWithRetry(ctx context.Context, gpuRequest *tgpv1.GPURequest, log logr.Logger) error {
+func (r *GPURequestReconciler) updateStatusWithRetry(ctx context.Context, gpuRequest *tgpv1.GPURequest, _ logr.Logger) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		// Fetch the latest version of the resource
 		latest := &tgpv1.GPURequest{}
@@ -255,15 +275,15 @@ func (r *GPURequestReconciler) updateStatusWithRetry(ctx context.Context, gpuReq
 	})
 }
 
-func (r *GPURequestReconciler) handleFailed(ctx context.Context, gpuRequest *tgpv1.GPURequest, log logr.Logger) (ctrl.Result, error) {
+func (r *GPURequestReconciler) handleFailed(_ context.Context, _ *tgpv1.GPURequest, log logr.Logger) ctrl.Result {
 	log.Info("handling failed GPURequest")
 
 	// TODO: Implement retry logic or cleanup
-	return ctrl.Result{RequeueAfter: time.Minute * 10}, nil
+	return ctrl.Result{RequeueAfter: time.Minute * 10}
 }
 
 // performHealthCheck verifies the instance is healthy by checking provider status
-func (r *GPURequestReconciler) performHealthCheck(ctx context.Context, gpuRequest *tgpv1.GPURequest, log logr.Logger) error {
+func (r *GPURequestReconciler) performHealthCheck(ctx context.Context, gpuRequest *tgpv1.GPURequest, _ logr.Logger) error {
 	if gpuRequest.Status.InstanceID == "" || gpuRequest.Status.SelectedProvider == "" {
 		return fmt.Errorf("missing instance information for health check")
 	}
@@ -274,29 +294,39 @@ func (r *GPURequestReconciler) performHealthCheck(ctx context.Context, gpuReques
 	}
 
 	status, err := provider.GetInstanceStatus(ctx, gpuRequest.Status.InstanceID)
-
-	// Record health check metrics
-	if r.Metrics != nil {
-		if err != nil {
-			r.Metrics.RecordHealthCheck(gpuRequest.Status.SelectedProvider, "error")
-		} else {
-			r.Metrics.RecordHealthCheck(gpuRequest.Status.SelectedProvider, "success")
-		}
-	}
+	r.recordHealthCheckMetrics(gpuRequest.Status.SelectedProvider, err)
 
 	if err != nil {
 		return fmt.Errorf("failed to get instance status: %w", err)
 	}
 
-	// Update instance details from provider status
+	r.updateInstanceDetails(gpuRequest, status)
+	return r.validateInstanceState(status)
+}
+
+// recordHealthCheckMetrics records metrics for health check operations
+func (r *GPURequestReconciler) recordHealthCheckMetrics(provider string, err error) {
+	if r.Metrics != nil {
+		if err != nil {
+			r.Metrics.RecordHealthCheck(provider, "error")
+		} else {
+			r.Metrics.RecordHealthCheck(provider, "success")
+		}
+	}
+}
+
+// updateInstanceDetails updates instance IP addresses from provider status
+func (r *GPURequestReconciler) updateInstanceDetails(gpuRequest *tgpv1.GPURequest, status *providers.InstanceStatus) {
 	if status.PublicIP != "" && status.PublicIP != gpuRequest.Status.PublicIP {
 		gpuRequest.Status.PublicIP = status.PublicIP
 	}
 	if status.PrivateIP != "" && status.PrivateIP != gpuRequest.Status.PrivateIP {
 		gpuRequest.Status.PrivateIP = status.PrivateIP
 	}
+}
 
-	// Check if instance is still running
+// validateInstanceState checks if instance is in a healthy state
+func (r *GPURequestReconciler) validateInstanceState(status *providers.InstanceStatus) error {
 	switch status.State {
 	case providers.InstanceStateRunning:
 		// Instance is healthy
@@ -322,17 +352,18 @@ func (r *GPURequestReconciler) updateCondition(gpuRequest *tgpv1.GPURequest, con
 
 	// Find existing condition
 	for i, condition := range gpuRequest.Status.Conditions {
-		if condition.Type == conditionType {
-			// Update existing condition if status changed
-			if condition.Status != status {
-				gpuRequest.Status.Conditions[i].Status = status
-				gpuRequest.Status.Conditions[i].LastTransitionTime = now
-			}
-			gpuRequest.Status.Conditions[i].Reason = reason
-			gpuRequest.Status.Conditions[i].Message = message
-			gpuRequest.Status.Conditions[i].ObservedGeneration = gpuRequest.Generation
-			return
+		if condition.Type != conditionType {
+			continue
 		}
+		// Update existing condition if status changed
+		if condition.Status != status {
+			gpuRequest.Status.Conditions[i].Status = status
+			gpuRequest.Status.Conditions[i].LastTransitionTime = now
+		}
+		gpuRequest.Status.Conditions[i].Reason = reason
+		gpuRequest.Status.Conditions[i].Message = message
+		gpuRequest.Status.Conditions[i].ObservedGeneration = gpuRequest.Generation
+		return
 	}
 
 	// Add new condition
@@ -348,7 +379,9 @@ func (r *GPURequestReconciler) updateCondition(gpuRequest *tgpv1.GPURequest, con
 }
 
 // checkIdleTimeout determines if an instance has been idle beyond the configured timeout
-func (r *GPURequestReconciler) checkIdleTimeout(ctx context.Context, gpuRequest *tgpv1.GPURequest, log logr.Logger) (bool, string, error) {
+func (r *GPURequestReconciler) checkIdleTimeout(
+	ctx context.Context, gpuRequest *tgpv1.GPURequest, log logr.Logger,
+) (idle bool, reason string, err error) {
 	idleTimeout := gpuRequest.Spec.IdleTimeout.Duration
 
 	// If node hasn't been provisioned yet, not considered idle
@@ -407,9 +440,9 @@ func (r *GPURequestReconciler) getActivePodsOnNode(ctx context.Context, nodeName
 	}
 
 	activePods := 0
-	for _, pod := range podList.Items {
+	for i := range podList.Items {
 		// Count pods that are not in terminal states
-		if pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed {
+		if podList.Items[i].Status.Phase != corev1.PodSucceeded && podList.Items[i].Status.Phase != corev1.PodFailed {
 			activePods++
 		}
 	}
@@ -541,8 +574,8 @@ func (r *GPURequestReconciler) launchInstance(
 	log.Info("launching new instance", "provider", selectedProvider)
 
 	// Check GPU availability
-	if available, result, err := r.checkGPUAvailability(ctx, gpuRequest, provider, log); !available {
-		return result, err
+	if available, result := r.checkGPUAvailability(ctx, gpuRequest, provider, log); !available {
+		return result, nil
 	}
 
 	// Create and execute launch request
@@ -722,7 +755,7 @@ func (r *GPURequestReconciler) checkGPUAvailability(
 	gpuRequest *tgpv1.GPURequest,
 	provider providers.ProviderClient,
 	log logr.Logger,
-) (bool, ctrl.Result, error) {
+) (available bool, result ctrl.Result) {
 	filters := &providers.GPUFilters{
 		GPUType: gpuRequest.Spec.GPUType,
 		Region:  gpuRequest.Spec.Region,
@@ -742,7 +775,7 @@ func (r *GPURequestReconciler) checkGPUAvailability(
 		if updateErr := r.updateStatusWithRetry(ctx, gpuRequest, log); updateErr != nil {
 			log.Error(updateErr, "failed to update status to failed")
 		}
-		return false, ctrl.Result{RequeueAfter: FailedRequeue}, nil
+		return false, ctrl.Result{RequeueAfter: FailedRequeue}
 	}
 
 	if len(gpus) == 0 {
@@ -751,10 +784,10 @@ func (r *GPURequestReconciler) checkGPUAvailability(
 		if err := r.updateStatusWithRetry(ctx, gpuRequest, log); err != nil {
 			log.Error(err, "failed to update status message")
 		}
-		return false, ctrl.Result{RequeueAfter: ProvisioningRequeue}, nil
+		return false, ctrl.Result{RequeueAfter: ProvisioningRequeue}
 	}
 
-	return true, ctrl.Result{}, nil
+	return true, ctrl.Result{}
 }
 
 // executeLaunchRequest creates and executes the launch request
@@ -762,7 +795,7 @@ func (r *GPURequestReconciler) executeLaunchRequest(
 	ctx context.Context,
 	gpuRequest *tgpv1.GPURequest,
 	provider providers.ProviderClient,
-	log logr.Logger,
+	_ logr.Logger,
 ) (*providers.GPUInstance, error) {
 	// Resolve any secret references in WireGuardConfig
 	resolvedWireGuardConfig, err := gpuRequest.Spec.TalosConfig.WireGuardConfig.Resolve(ctx, r.Client, gpuRequest.Namespace)

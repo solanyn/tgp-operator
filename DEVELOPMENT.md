@@ -330,10 +330,110 @@ task test:validate-providers
 
 ## Testing Strategy
 
-- **Unit tests** - Test individual components with mocks
-- **Integration tests** - Test controller logic (envtest) + operator workflow (Docker Talos + mocked providers)
-- **Provider validation** - Test real API connectivity without launching instances
-- **E2E tests** - Test against real cloud providers (cost involved, requires credentials)
+### CI Pipeline (Automated)
+- **Unit tests** - Test individual components and controller logic
+- **Integration tests** - Test Kubernetes controller behavior with envtest
+- **E2E tests** - Test full workflow with real provider APIs (manual trigger or weekly)
+- **Linting & Security** - Code quality and security checks
+
+### Manual Testing (Developer-Run)
+- **Provider validation** - Test real API connectivity without launching instances  
+- **E2E tests** - Test full workflow with real cloud providers (**requires API keys & WireGuard server**)
+
+### Testing Commands
+
+```bash
+# CI-equivalent tests (run locally)
+task test:unit                    # Unit tests only
+task test:integration            # Integration tests with envtest
+task test:all                    # Unit + integration tests
+
+# Manual testing with real APIs
+task test:validate-providers     # Test API connectivity (no instance launches)
+task test:e2e                   # Manual E2E workflow with real providers
+
+# Automated E2E testing (advanced)
+task test:e2e-automated          # Fully automated E2E with infrastructure provisioning
+```
+
+> **⚠️ Important**: E2E tests require:
+> - Real cloud provider API keys (may incur costs)
+> - WireGuard server infrastructure for node connectivity testing
+> - Always run `validate-providers` first to verify API connectivity
+
+### E2E Testing Infrastructure Requirements
+
+For full E2E testing, you need:
+
+1. **WireGuard Server Setup**:
+   ```bash
+   # Example: Deploy WireGuard server on a VPS or homelab
+   # Generate keypairs for testing
+   wg genkey | tee privatekey | wg pubkey > publickey
+   
+   # Configure server to accept test clients
+   # Update server configuration with test client public keys
+   ```
+
+2. **Provider API Access**: 
+   - Valid API keys for cloud providers
+   - Sufficient credits/limits for testing
+
+3. **Network Connectivity**:
+   - WireGuard server accessible from cloud provider networks
+   - Proper firewall/routing configuration
+
+### Automated E2E Testing
+
+The `task test:e2e-automated` command fully automates the E2E testing process:
+
+```bash
+# Set up environment variables
+export RUNPOD_API_KEY="your_runpod_key"
+export LAMBDA_LABS_API_KEY="your_lambda_key"
+export HETZNER_API_TOKEN="your_hetzner_token"  # For WireGuard server
+
+# Run fully automated E2E testing
+task test:e2e-automated
+```
+
+**What it automates**:
+- WireGuard server deployment (cheap VPS)
+- Keypair generation and distribution
+- Talos Docker cluster setup
+- TGP operator deployment with real credentials
+- Full E2E test workflow execution
+- Automatic cleanup of all resources
+
+**Costs**: ~$0.10-0.50 per test run (small VPS + API calls)
+
+### GitHub Actions E2E Testing
+
+The repository includes true E2E testing using GitHub Actions runners with real provider APIs:
+
+**What it tests**:
+- Real provider API connectivity (list GPUs, pricing queries)  
+- Controller reconciliation with actual API responses
+- WireGuard secret resolution and configuration
+- Error handling with invalid requests
+- Full workflow without expensive GPU launches
+
+**Safety features**:
+- Uses extremely low price limits to prevent accidental launches
+- Tests error conditions (invalid providers, regions, secrets)
+- Automatic cleanup of all test resources
+- Manual trigger for cost control
+
+**Trigger E2E tests**:
+```bash
+# Test specific provider
+gh workflow run test-e2e.yml -f provider=runpod
+
+# Test all providers
+gh workflow run test-e2e.yml -f provider=all
+```
+
+**Scheduled**: Runs weekly on main branch to catch API changes
 
 ## Releases
 

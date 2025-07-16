@@ -10,7 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// ResolveWireGuardConfig resolves all secret references in WireGuardConfig
+// Resolve resolves all secret references in WireGuardConfig
 func (w *WireGuardConfig) Resolve(ctx context.Context, client client.Client, namespace string) (*WireGuardConfig, error) {
 	resolved := &WireGuardConfig{
 		PrivateKey:     w.PrivateKey,
@@ -20,50 +20,61 @@ func (w *WireGuardConfig) Resolve(ctx context.Context, client client.Client, nam
 		Address:        w.Address,
 	}
 
-	// Resolve PrivateKey
-	if w.PrivateKeySecretRef != nil {
-		if w.PrivateKey != "" {
-			return nil, fmt.Errorf("cannot specify both privateKey and privateKeySecretRef")
-		}
-		value, err := resolveSecretRef(ctx, client, w.PrivateKeySecretRef, namespace)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve privateKey secret: %w", err)
-		}
-		resolved.PrivateKey = value
+	// Resolve string fields
+	if err := w.resolveStringField(ctx, client, namespace, "privateKey", w.PrivateKey,
+		w.PrivateKeySecretRef, &resolved.PrivateKey); err != nil {
+		return nil, err
+	}
+	if err := w.resolveStringField(ctx, client, namespace, "publicKey", w.PublicKey,
+		w.PublicKeySecretRef, &resolved.PublicKey); err != nil {
+		return nil, err
+	}
+	if err := w.resolveStringField(ctx, client, namespace, "serverEndpoint", w.ServerEndpoint,
+		w.ServerEndpointSecretRef, &resolved.ServerEndpoint); err != nil {
+		return nil, err
+	}
+	if err := w.resolveStringField(ctx, client, namespace, "address", w.Address,
+		w.AddressSecretRef, &resolved.Address); err != nil {
+		return nil, err
 	}
 
-	// Resolve PublicKey
-	if w.PublicKeySecretRef != nil {
-		if w.PublicKey != "" {
-			return nil, fmt.Errorf("cannot specify both publicKey and publicKeySecretRef")
-		}
-		value, err := resolveSecretRef(ctx, client, w.PublicKeySecretRef, namespace)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve publicKey secret: %w", err)
-		}
-		resolved.PublicKey = value
+	// Resolve AllowedIPs (special case for slice)
+	if err := w.resolveAllowedIPs(ctx, client, namespace, resolved); err != nil {
+		return nil, err
 	}
 
-	// Resolve ServerEndpoint
-	if w.ServerEndpointSecretRef != nil {
-		if w.ServerEndpoint != "" {
-			return nil, fmt.Errorf("cannot specify both serverEndpoint and serverEndpointSecretRef")
-		}
-		value, err := resolveSecretRef(ctx, client, w.ServerEndpointSecretRef, namespace)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve serverEndpoint secret: %w", err)
-		}
-		resolved.ServerEndpoint = value
-	}
+	return resolved, nil
+}
 
-	// Resolve AllowedIPs
+// resolveStringField resolves a string field with optional secret reference
+func (w *WireGuardConfig) resolveStringField(
+	ctx context.Context, client client.Client, namespace, fieldName, directValue string,
+	secretRef *SecretKeyRef, target *string,
+) error {
+	if secretRef != nil {
+		if directValue != "" {
+			return fmt.Errorf("cannot specify both %s and %sSecretRef", fieldName, fieldName)
+		}
+		value, err := resolveSecretRef(ctx, client, secretRef, namespace)
+		if err != nil {
+			return fmt.Errorf("failed to resolve %s secret: %w", fieldName, err)
+		}
+		*target = value
+	}
+	return nil
+}
+
+// resolveAllowedIPs resolves the AllowedIPs field with special slice handling
+func (w *WireGuardConfig) resolveAllowedIPs(
+	ctx context.Context, client client.Client, namespace string, resolved *WireGuardConfig,
+) error {
 	if w.AllowedIPsSecretRef != nil {
 		if len(w.AllowedIPs) > 0 {
-			return nil, fmt.Errorf("cannot specify both allowedIPs and allowedIPsSecretRef")
+			return fmt.Errorf("cannot specify both allowedIPs and allowedIPsSecretRef")
 		}
 		value, err := resolveSecretRef(ctx, client, w.AllowedIPsSecretRef, namespace)
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve allowedIPs secret: %w", err)
+			return fmt.Errorf("failed to resolve allowedIPs secret: %w", err)
 		}
 		// Parse comma-separated IPs
 		resolved.AllowedIPs = strings.Split(strings.TrimSpace(value), ",")
@@ -71,24 +82,13 @@ func (w *WireGuardConfig) Resolve(ctx context.Context, client client.Client, nam
 			resolved.AllowedIPs[i] = strings.TrimSpace(ip)
 		}
 	}
-
-	// Resolve Address
-	if w.AddressSecretRef != nil {
-		if w.Address != "" {
-			return nil, fmt.Errorf("cannot specify both address and addressSecretRef")
-		}
-		value, err := resolveSecretRef(ctx, client, w.AddressSecretRef, namespace)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve address secret: %w", err)
-		}
-		resolved.Address = value
-	}
-
-	return resolved, nil
+	return nil
 }
 
 // resolveSecretRef resolves a single secret reference
-func resolveSecretRef(ctx context.Context, client client.Client, ref *SecretKeyRef, defaultNamespace string) (string, error) {
+func resolveSecretRef(
+	ctx context.Context, client client.Client, ref *SecretKeyRef, defaultNamespace string,
+) (string, error) {
 	if ref == nil {
 		return "", fmt.Errorf("secret reference is nil")
 	}

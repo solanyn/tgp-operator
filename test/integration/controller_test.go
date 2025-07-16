@@ -107,15 +107,15 @@ func TestE2E(t *testing.T) {
 		t.Fatalf("Failed to start test environment: %v", err)
 	}
 	defer func() {
-		if err := testEnv.Stop(); err != nil {
-			t.Errorf("Failed to stop test environment: %v", err)
+		if stopErr := testEnv.Stop(); stopErr != nil {
+			t.Errorf("Failed to stop test environment: %v", stopErr)
 		}
 	}()
 
 	// Setup scheme
 	scheme := runtime.NewScheme()
-	if err := tgpv1.AddToScheme(scheme); err != nil {
-		t.Fatalf("Failed to add scheme: %v", err)
+	if schemeErr := tgpv1.AddToScheme(scheme); schemeErr != nil {
+		t.Fatalf("Failed to add scheme: %v", schemeErr)
 	}
 
 	// Create manager
@@ -230,7 +230,7 @@ func TestE2E(t *testing.T) {
 }
 
 func waitForCondition(
-	t *testing.T,
+	_ *testing.T,
 	client client.Client,
 	obj *tgpv1.GPURequest,
 	timeout time.Duration,
@@ -255,7 +255,7 @@ func waitForCondition(
 	}
 }
 
-func waitForDeletion(t *testing.T, client client.Client, obj *tgpv1.GPURequest, timeout time.Duration) bool {
+func waitForDeletion(_ *testing.T, client client.Client, obj *tgpv1.GPURequest, timeout time.Duration) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 

@@ -9,5 +9,5 @@ appVersion: 0.0.1
 home: https://github.com/solanyn/tgp-operator
 sources: [https://github.com/solanyn/tgp-operator]
 maintainers:
-  - name: "@solanyn"
+  - name: '@solanyn'
     email: 14799876+solanyn@users.noreply.github.com

@@ -65,21 +65,28 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
 	// Execute action
 	switch *action {
 	case "info":
 		testProviderInfo(client)
 	case "list":
-		testListGPUs(ctx, client, *gpuType, *region, *maxPrice, *pretty)
+		executeWithTimeout(func(ctx context.Context) {
+			testListGPUs(ctx, client, *gpuType, *region, *maxPrice, *pretty)
+		})
 	case "pricing":
-		testPricing(ctx, client, *gpuType, *region, *pretty)
+		executeWithTimeout(func(ctx context.Context) {
+			testPricing(ctx, client, *gpuType, *region, *pretty)
+		})
 	default:
 		fmt.Printf("Unknown action: %s\n", *action)
 		os.Exit(1)
 	}
+}
+
+func executeWithTimeout(fn func(context.Context)) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	fn(ctx)
 }
 
 func testProviderInfo(client providers.ProviderClient) {

@@ -13,15 +13,17 @@ import (
 )
 
 const (
-	fakeAPIKey    = "fake-api-key"
-	stateRunning  = "running"
-	stateReady    = "ready"
-	stateStarting = "starting"
-	stateStopping = "stopping"
-	stateStopped  = "stopped"
-	stateOff      = "off"
-	stateError    = "error"
-	stateFailed   = "failed"
+	fakeAPIKey        = "fake-api-key" // #nosec G101 -- This is a test constant, not a real credential
+	stateRunning      = "running"
+	stateReady        = "ready"
+	stateStarting     = "starting"
+	stateStopping     = "stopping"
+	stateStopped      = "stopped"
+	stateOff          = "off"
+	stateError        = "error"
+	provisioningState = "provisioning"
+	shuttingDownState = "shutting-down"
+	stateFailed       = "failed"
 )
 
 type Client struct {
@@ -299,9 +301,9 @@ func (c *Client) translateStatus(state string) providers.InstanceState {
 	switch strings.ToLower(state) {
 	case stateRunning, stateReady:
 		return providers.InstanceStateRunning
-	case stateStarting, "provisioning":
+	case stateStarting, provisioningState:
 		return providers.InstanceStatePending
-	case stateStopping, "shutting-down":
+	case stateStopping, shuttingDownState:
 		return providers.InstanceStateTerminating
 	case stateStopped, stateOff:
 		return providers.InstanceStateTerminated
@@ -317,9 +319,9 @@ func (c *Client) getStatusMessage(state string) string {
 	switch strings.ToLower(state) {
 	case stateRunning, stateReady:
 		return "Instance is running"
-	case stateStarting, "provisioning":
+	case stateStarting, provisioningState:
 		return "Instance is starting"
-	case stateStopping, "shutting-down":
+	case stateStopping, shuttingDownState:
 		return "Instance is stopping"
 	case stateStopped, stateOff:
 		return "Instance is stopped"

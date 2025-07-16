@@ -27,7 +27,9 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
-func init() {
+// init registers required schemes for the controller manager.
+// This is required for Kubernetes controller-runtime functionality.
+func init() { //nolint:gochecknoinits // Required for Kubernetes scheme registration
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(tgpv1.AddToScheme(scheme))
 }

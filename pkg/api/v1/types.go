@@ -1,3 +1,4 @@
+// Package v1 contains API Schema definitions for the tgp v1 API group
 // +kubebuilder:object:generate=true
 package v1
 
@@ -8,7 +9,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func init() {
+// init registers the GPURequest types with the scheme builder.
+// This is required for Kubernetes controller-runtime functionality.
+func init() { //nolint:gochecknoinits // Required for Kubernetes scheme registration
 	SchemeBuilder.Register(&GPURequest{}, &GPURequestList{})
 }
 

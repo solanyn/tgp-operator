@@ -63,3 +63,7 @@ secrets/
 # Test artifacts
 testbin/
 cover.out
+test-infrastructure/
+
+# Task runner cache
+.task/

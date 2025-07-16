@@ -12,6 +12,10 @@ import (
 	"github.com/solanyn/tgp-operator/pkg/providers/lambdalabs/api"
 )
 
+const (
+	fakeAPIKey = "fake-api-key" // #nosec G101 -- This is a test constant, not a real credential
+)
+
 type Client struct {
 	apiKey    string
 	apiClient *api.ClientWithResponses
@@ -53,7 +57,7 @@ func (c *Client) TranslateRegion(standard string) (string, error) {
 }
 
 func (c *Client) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFilters) ([]providers.GPUOffer, error) {
-	if c.apiClient == nil || c.apiKey == "fake-api-key" {
+	if c.apiClient == nil || c.apiKey == fakeAPIKey {
 		// Return mock data when API client is not initialized (for testing)
 		return []providers.GPUOffer{
 			{
@@ -133,7 +137,7 @@ func (c *Client) ListOffers(ctx context.Context, gpuType, region string) ([]prov
 }
 
 func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchRequest) (*providers.GPUInstance, error) {
-	if c.apiClient == nil || c.apiKey == "fake-api-key" {
+	if c.apiClient == nil || c.apiKey == fakeAPIKey {
 		// Return mock data when API client is not initialized (for testing)
 		return &providers.GPUInstance{
 			ID:        fmt.Sprintf("lambda-test-%d", time.Now().Unix()),
@@ -187,7 +191,7 @@ func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchReques
 }
 
 func (c *Client) GetInstanceStatus(ctx context.Context, instanceID string) (*providers.InstanceStatus, error) {
-	if c.apiClient == nil || c.apiKey == "fake-api-key" {
+	if c.apiClient == nil || c.apiKey == fakeAPIKey {
 		// Return mock data when API client is not initialized (for testing)
 		return &providers.InstanceStatus{
 			State:     providers.InstanceStateRunning,
@@ -247,7 +251,7 @@ func (c *Client) GetInstanceStatus(ctx context.Context, instanceID string) (*pro
 }
 
 func (c *Client) TerminateInstance(ctx context.Context, instanceID string) error {
-	if c.apiClient == nil || c.apiKey == "fake-api-key" {
+	if c.apiClient == nil || c.apiKey == fakeAPIKey {
 		// Return success for mock/test cases
 		return nil
 	}
@@ -273,8 +277,8 @@ func (c *Client) TerminateInstance(ctx context.Context, instanceID string) error
 	}
 
 	// Check if our instance was in the terminated list
-	for _, terminatedInstance := range resp.JSON200.Data.TerminatedInstances {
-		if terminatedInstance.Id == instanceID {
+	for i := range resp.JSON200.Data.TerminatedInstances {
+		if resp.JSON200.Data.TerminatedInstances[i].Id == instanceID {
 			return nil
 		}
 	}
@@ -283,7 +287,7 @@ func (c *Client) TerminateInstance(ctx context.Context, instanceID string) error
 }
 
 func (c *Client) GetNormalizedPricing(ctx context.Context, gpuType, region string) (*providers.NormalizedPricing, error) {
-	if c.apiClient == nil || c.apiKey == "fake-api-key" {
+	if c.apiClient == nil || c.apiKey == fakeAPIKey {
 		// Return mock pricing data when API client is not initialized (for testing)
 		return &providers.NormalizedPricing{
 			PricePerHour:   1.50,
