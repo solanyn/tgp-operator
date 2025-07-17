@@ -7,6 +7,8 @@ node = "22.14.0"
 "npm:@apiture/openapi-down-convert" = "latest"
 op = "latest"
 python = "latest"
+svu = "latest"
+"pipx:yamlfix" = "latest"
 
 [env]
 GOBIN = "{{config_root}}/bin"

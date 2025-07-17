@@ -26,15 +26,14 @@ jobs:
     permissions:
       contents: read
       security-events: write
-  build-and-push:
-    name: Build and Push Images
+  build:
+    name: Build Images
     needs: [lint, test-go]
     uses: ./.github/workflows/build-and-push-images.yml
     with:
-      push: true
+      push: false
     permissions:
       contents: read
-      packages: write
   check-release:
     name: Check for Release
     runs-on: ubuntu-latest
@@ -66,7 +65,7 @@ jobs:
   release-notification:
     name: Release Notification
     runs-on: ubuntu-latest
-    needs: [check-release, build-and-push]
+    needs: [check-release, build]
     if: needs.check-release.outputs.needs-release == 'true'
     steps:
       - uses: actions/checkout@v4
