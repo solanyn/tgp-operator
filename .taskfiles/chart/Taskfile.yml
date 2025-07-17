@@ -44,9 +44,25 @@ tasks:
     desc: Package Helm chart
     deps: [validate]
     cmds: ['helm package {{.CHART_DIR}} --destination dist/']
+  sync-version:
+    desc: Sync Chart.yaml version with svu
+    vars:
+      VERSION:
+        sh: |
+          if command -v svu >/dev/null 2>&1; then
+            svu next --strip-prefix
+          else
+            echo "0.1.0"
+          fi
+    cmds:
+      - |
+        sed -i.bak "s/^version:.*/version: {{.VERSION}}/" {{.CHART_DIR}}/Chart.yaml
+        sed -i.bak "s/^appVersion:.*/appVersion: {{.VERSION}}/" {{.CHART_DIR}}/Chart.yaml
+        rm {{.CHART_DIR}}/Chart.yaml.bak
+        echo "Updated Chart.yaml to version {{.VERSION}}"
   push-oci:
     desc: Push Helm chart as OCI artifact to GHCR
-    deps: [validate]
+    deps: [validate, sync-version]
     vars:
       VERSION:
         sh: |
@@ -57,8 +73,7 @@ tasks:
           fi
       CHART_REPO: oci://ghcr.io/solanyn/charts
     cmds:
-      - helm package {{.CHART_DIR}} --version {{.VERSION}} --app-version {{.VERSION}}
-        --destination dist/
+      - helm package {{.CHART_DIR}} --destination dist/
       - helm push dist/tgp-operator-{{.VERSION}}.tgz {{.CHART_REPO}}
       - echo "Pushed chart {{.CHART_REPO}}/tgp-operator:{{.VERSION}}"
   install:
