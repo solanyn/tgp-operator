@@ -6,6 +6,7 @@ helm = "3.14.0"
 node = "22.14.0"
 "npm:@apiture/openapi-down-convert" = "latest"
 op = "latest"
+python = "latest"
 
 [env]
 GOBIN = "{{config_root}}/bin"
