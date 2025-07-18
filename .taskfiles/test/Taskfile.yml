@@ -2,15 +2,13 @@
 version: '3'
 env:
   KUBEBUILDER_ASSETS:
-    sh: $(go env GOPATH)/bin/setup-envtest use 1.28.0 -p path 2>/dev/null || echo
-      ""
+    sh: mise exec -- setup-envtest use 1.28.0 -p path 2>/dev/null || echo ""
   KIND_CLUSTER_NAME: tgp-operator-test
 tasks:
   setup-envtest:
     desc: Setup envtest environment
     cmds:
-      - go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
-      - $(go env GOPATH)/bin/setup-envtest use 1.28.0
+      - mise exec -- setup-envtest use 1.28.0
     status: ['test -n "{{.KUBEBUILDER_ASSETS}}"']
   unit:
     desc: Run unit tests
@@ -24,9 +22,7 @@ tasks:
     deps: [setup-envtest]
     cmds:
       - echo "Running envtest integration tests..."
-      - go test ./test/integration/... -v
-    env:
-      KUBEBUILDER_ASSETS: '{{.KUBEBUILDER_ASSETS}}'
+      - KUBEBUILDER_ASSETS="$(mise exec -- setup-envtest use 1.28.0 -p path)" go test ./test/integration/... -v
   setup-talos:
     desc: Create Docker-based Talos cluster for e2e tests
     cmds:
@@ -63,7 +59,7 @@ tasks:
     cmds:
       - echo "Validating cloud provider credentials and connectivity..."
       - echo ""
-      - echo "Setup - Export provider API keys as environment variables:"
+      - "echo 'Setup - Export provider API keys as environment variables:'"
       - echo "  export VAST_API_KEY=your_vast_key"
       - echo "  export RUNPOD_API_KEY=your_runpod_key"
       - echo "  export LAMBDA_LABS_API_KEY=your_lambda_key"
@@ -79,15 +75,15 @@ tasks:
     cmds:
       - echo "Running E2E tests with real cloud provider APIs"
       - echo ""
-      - echo "WARNING: This uses real API keys and may incur costs"
+      - "echo 'WARNING: This uses real API keys and may incur costs'"
       - echo ""
-      - echo "Prerequisites:"
-      - echo "  1. Set up API keys as environment variables:"
+      - "echo 'Prerequisites:'"
+      - "echo '  1. Set up API keys as environment variables:'"
       - echo "     export RUNPOD_API_KEY=your_runpod_key"
       - echo "     export LAMBDA_LABS_API_KEY=your_lambda_key"
       - echo "     export PAPERSPACE_API_KEY=your_paperspace_key"
       - echo ""
-      - echo "  2. Set up WireGuard server infrastructure:"
+      - "echo '  2. Set up WireGuard server infrastructure:'"
       - echo "     - Deploy WireGuard server (VPS, homelab, etc.)"
       - echo "     - Generate keypairs for testing"
       - echo "     - Configure server to accept test clients"
@@ -122,7 +118,7 @@ tasks:
     cmds:
       - echo "Setting up WireGuard server for E2E testing..."
       - echo ""
-      - echo "Prerequisites:"
+      - "echo 'Prerequisites:'"
       - echo "  - Cloud provider credentials (for VPS deployment)"
       - echo "  - SSH key configured"
       - echo ""
@@ -188,14 +184,14 @@ tasks:
     cmds:
       - echo "Running fully automated E2E testing..."
       - echo ""
-      - echo "This will:"
+      - "echo 'This will:'"
       - echo "  1. Deploy WireGuard server (if not exists)"
       - echo "  2. Set up Talos Docker cluster"
       - echo "  3. Deploy TGP operator with real credentials"
       - echo "  4. Run E2E test workflow"
       - echo "  5. Clean up infrastructure"
       - echo ""
-      - echo "WARNING: This will provision cloud resources and incur costs"
+      - "echo 'WARNING: This will provision cloud resources and incur costs'"
       - echo ""
       - task: setup-wireguard-server
       - task: setup-talos
@@ -239,7 +235,7 @@ tasks:
     desc: Deploy operator for E2E testing
     cmds:
       - echo "Deploying TGP operator with real configuration..."
-      - echo "TODO: Deploy operator with test configuration"
+      - "echo 'TODO: Deploy operator with test configuration'"
   _run-e2e-test-cases:
     desc: Execute E2E test scenarios
     cmds:
@@ -250,7 +246,7 @@ tasks:
       - echo "  4. Testing secret resolution"
       - echo "  5. Verifying WireGuard configuration"
       - echo "  6. Stopping before expensive GPU launch"
-      - echo "TODO: Implement actual test cases"
+      - "echo 'TODO: Implement actual test cases'"
   cleanup-e2e-infrastructure:
     desc: Clean up E2E testing infrastructure
     cmds:
@@ -275,7 +271,7 @@ tasks:
     desc: Provision a real cloud-based Talos cluster
     cmds:
       - echo "Provisioning cloud-based Talos cluster..."
-      - echo "This requires:"
+      - "echo 'This requires:'"
       - echo "  - Talos CLI (talosctl)"
       - echo "  - Cloud provider credentials (AWS/GCP/Azure/etc)"
       - echo "  - WireGuard configuration"
