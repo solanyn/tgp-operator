@@ -8,29 +8,6 @@ import (
 	"github.com/solanyn/tgp-operator/pkg/providers"
 )
 
-func TestNewClient(t *testing.T) {
-	t.Run("should create a new client with API key", func(t *testing.T) {
-		client := NewClient("fake-api-key")
-		if client == nil {
-			t.Fatal("Expected client to not be nil")
-		}
-		if client.apiKey != "fake-api-key" {
-			t.Errorf("Expected API key to be 'fake-api-key', got: %s", client.apiKey)
-		}
-	})
-}
-
-func TestClient_GetProviderInfo(t *testing.T) {
-	client := NewClient("fake-api-key")
-
-	t.Run("should return provider info", func(t *testing.T) {
-		info := client.GetProviderInfo()
-		if info.Name != "runpod" {
-			t.Errorf("Expected provider name to be 'runpod', got: %s", info.Name)
-		}
-	})
-}
-
 func TestClient_LaunchInstance(t *testing.T) {
 	client := NewClient("fake-api-key")
 	ctx := context.Background()

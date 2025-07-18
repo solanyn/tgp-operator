@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -101,7 +102,8 @@ func (m *mockProvider) ListAvailableGPUs(ctx context.Context, filters *providers
 	}, nil
 }
 
-func TestGPURequestController_Reconcile(t *testing.T) {
+// Helper function to set up test reconciler
+func setupTestReconciler(t *testing.T) (*GPURequestReconciler, client.Client, context.Context) {
 	scheme := runtime.NewScheme()
 	if err := tgpv1.AddToScheme(scheme); err != nil {
 		t.Fatalf("Failed to add scheme: %v", err)
@@ -122,176 +124,174 @@ func TestGPURequestController_Reconcile(t *testing.T) {
 		PricingCache: pricing.NewCache(time.Minute * 5),
 	}
 
-	ctx := context.Background()
+	return reconciler, fakeClient, context.Background()
+}
 
-	t.Run("should return without error when GPURequest does not exist", func(t *testing.T) {
-		req := ctrl.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      "non-existent",
-				Namespace: "default",
-			},
-		}
+func TestGPURequestController_Reconcile_NonExistent(t *testing.T) {
+	reconciler, _, ctx := setupTestReconciler(t)
 
-		result, err := reconciler.Reconcile(ctx, req)
-		if err != nil {
-			t.Errorf("Expected no error, got: %v", err)
-		}
-		if result != (ctrl.Result{}) {
-			t.Errorf("Expected empty result, got: %+v", result)
-		}
-	})
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      "non-existent",
+			Namespace: "default",
+		},
+	}
 
-	t.Run("should add finalizer on first reconcile", func(t *testing.T) {
-		gpuRequest := &tgpv1.GPURequest{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-gpu-request",
-				Namespace: "default",
-			},
-			Spec: tgpv1.GPURequestSpec{
-				Provider: "runpod",
-				GPUType:  "RTX3090",
-				TalosConfig: tgpv1.TalosConfig{
-					Image: "factory.talos.dev/installer/test:v1.8.2",
-					WireGuardConfig: tgpv1.WireGuardConfig{
-						PrivateKey:     "test-private-key",
-						PublicKey:      "test-public-key",
-						ServerEndpoint: "vpn.example.com:51820",
-						AllowedIPs:     []string{"10.0.0.0/24"},
-						Address:        "10.0.0.2/24",
-					},
+	result, err := reconciler.Reconcile(ctx, req)
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+	if result != (ctrl.Result{}) {
+		t.Errorf("Expected empty result, got: %+v", result)
+	}
+}
+
+func TestGPURequestController_Reconcile_AddFinalizer(t *testing.T) {
+	reconciler, fakeClient, ctx := setupTestReconciler(t)
+
+	gpuRequest := &tgpv1.GPURequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-gpu-request",
+			Namespace: "default",
+		},
+		Spec: tgpv1.GPURequestSpec{
+			Provider: "runpod",
+			GPUType:  "RTX3090",
+			TalosConfig: tgpv1.TalosConfig{
+				Image: "factory.talos.dev/installer/test:v1.8.2",
+				WireGuardConfig: tgpv1.WireGuardConfig{
+					PrivateKey:     "test-private-key",
+					PublicKey:      "test-public-key",
+					ServerEndpoint: "vpn.example.com:51820",
+					AllowedIPs:     []string{"10.0.0.0/24"},
+					Address:        "10.0.0.2/24",
 				},
 			},
-		}
+		},
+	}
 
-		if err := fakeClient.Create(ctx, gpuRequest); err != nil {
-			t.Fatalf("Failed to create GPURequest: %v", err)
-		}
+	if err := fakeClient.Create(ctx, gpuRequest); err != nil {
+		t.Fatalf("Failed to create GPURequest: %v", err)
+	}
 
-		req := ctrl.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      gpuRequest.Name,
-				Namespace: gpuRequest.Namespace,
-			},
-		}
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      gpuRequest.Name,
+			Namespace: gpuRequest.Namespace,
+		},
+	}
 
-		result, err := reconciler.Reconcile(ctx, req)
-		if err != nil {
-			t.Errorf("Expected no error, got: %v", err)
-		}
-		if !result.Requeue {
-			t.Error("Expected requeue to be true")
-		}
+	result, err := reconciler.Reconcile(ctx, req)
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+	if !result.Requeue {
+		t.Error("Expected requeue to be true")
+	}
 
-		var updated tgpv1.GPURequest
-		if err := fakeClient.Get(ctx, req.NamespacedName, &updated); err != nil {
-			t.Fatalf("Failed to get updated GPURequest: %v", err)
-		}
+	var updated tgpv1.GPURequest
+	if err := fakeClient.Get(ctx, req.NamespacedName, &updated); err != nil {
+		t.Fatalf("Failed to get updated GPURequest: %v", err)
+	}
 
-		found := false
-		for _, finalizer := range updated.Finalizers {
-			if finalizer == FinalizerName {
-				found = true
-				break
-			}
+	found := false
+	for _, finalizer := range updated.Finalizers {
+		if finalizer == FinalizerName {
+			found = true
+			break
 		}
-		if !found {
-			t.Error("Expected finalizer to be added")
-		}
-	})
+	}
+	if !found {
+		t.Error("Expected finalizer to be added")
+	}
+}
 
-	t.Run("should handle pending phase", func(t *testing.T) {
-		gpuRequest := &tgpv1.GPURequest{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:       "test-pending",
-				Namespace:  "default",
-				Finalizers: []string{FinalizerName},
-			},
-			Spec: tgpv1.GPURequestSpec{
-				Provider: "runpod",
-				GPUType:  "RTX3090",
-			},
-		}
+func TestGPURequestController_Reconcile_PendingPhase(t *testing.T) {
+	reconciler, fakeClient, ctx := setupTestReconciler(t)
+	gpuRequest := &tgpv1.GPURequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-pending",
+			Namespace:  "default",
+			Finalizers: []string{FinalizerName},
+		},
+		Spec: tgpv1.GPURequestSpec{
+			Provider: "runpod",
+			GPUType:  "RTX3090",
+		},
+	}
 
-		if err := fakeClient.Create(ctx, gpuRequest); err != nil {
-			t.Fatalf("Failed to create GPURequest: %v", err)
-		}
+	if err := fakeClient.Create(ctx, gpuRequest); err != nil {
+		t.Fatalf("Failed to create GPURequest: %v", err)
+	}
 
-		req := ctrl.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      gpuRequest.Name,
-				Namespace: gpuRequest.Namespace,
-			},
-		}
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      gpuRequest.Name,
+			Namespace: gpuRequest.Namespace,
+		},
+	}
 
-		result, err := reconciler.Reconcile(ctx, req)
-		if err != nil {
-			t.Errorf("Expected no error, got: %v", err)
-		}
-		if !result.Requeue {
-			t.Error("Expected requeue to be true")
-		}
+	result, err := reconciler.Reconcile(ctx, req)
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+	if !result.Requeue {
+		t.Error("Expected requeue to be true")
+	}
 
-		var updated tgpv1.GPURequest
-		if err := fakeClient.Get(ctx, req.NamespacedName, &updated); err != nil {
-			t.Fatalf("Failed to get updated GPURequest: %v", err)
-		}
+	var updated tgpv1.GPURequest
+	if err := fakeClient.Get(ctx, req.NamespacedName, &updated); err != nil {
+		t.Fatalf("Failed to get updated GPURequest: %v", err)
+	}
 
-		if updated.Status.Phase != tgpv1.GPURequestPhaseProvisioning {
-			t.Errorf("Expected phase to be %s, got: %s", tgpv1.GPURequestPhaseProvisioning, updated.Status.Phase)
-		}
-	})
+	if updated.Status.Phase != tgpv1.GPURequestPhaseProvisioning {
+		t.Errorf("Expected phase to be %s, got: %s", tgpv1.GPURequestPhaseProvisioning, updated.Status.Phase)
+	}
+}
 
-	t.Run("should handle deletion", func(t *testing.T) {
-		// Create a separate reconciler with a mock provider that terminates successfully
-		successfulReconciler := &GPURequestReconciler{
-			Client: fakeClient,
-			Log:    zap.New(zap.UseDevMode(true)),
-			Scheme: scheme,
-			Providers: map[string]providers.ProviderClient{
-				"runpod": &mockProvider{name: "runpod"}, // No termination error
-			},
-			PricingCache: pricing.NewCache(time.Minute * 5),
-		}
+func TestGPURequestController_Reconcile_Deletion(t *testing.T) {
+	reconciler, fakeClient, ctx := setupTestReconciler(t)
 
-		gpuRequest := &tgpv1.GPURequest{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:       "test-deletion",
-				Namespace:  "default",
-				Finalizers: []string{FinalizerName},
-			},
-			Spec: tgpv1.GPURequestSpec{
-				Provider: "runpod",
-				GPUType:  "RTX3090",
-			},
-			Status: tgpv1.GPURequestStatus{
-				Phase:      tgpv1.GPURequestPhaseReady,
-				InstanceID: "test-instance-id",
-			},
-		}
+	// Use the reconciler from setup (it already has no termination error)
 
-		if err := fakeClient.Create(ctx, gpuRequest); err != nil {
-			t.Fatalf("Failed to create GPURequest: %v", err)
-		}
+	gpuRequest := &tgpv1.GPURequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-deletion",
+			Namespace:  "default",
+			Finalizers: []string{FinalizerName},
+		},
+		Spec: tgpv1.GPURequestSpec{
+			Provider: "runpod",
+			GPUType:  "RTX3090",
+		},
+		Status: tgpv1.GPURequestStatus{
+			Phase:      tgpv1.GPURequestPhaseReady,
+			InstanceID: "test-instance-id",
+		},
+	}
 
-		if err := fakeClient.Delete(ctx, gpuRequest); err != nil {
-			t.Fatalf("Failed to delete GPURequest: %v", err)
-		}
+	if err := fakeClient.Create(ctx, gpuRequest); err != nil {
+		t.Fatalf("Failed to create GPURequest: %v", err)
+	}
 
-		req := ctrl.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      gpuRequest.Name,
-				Namespace: gpuRequest.Namespace,
-			},
-		}
+	if err := fakeClient.Delete(ctx, gpuRequest); err != nil {
+		t.Fatalf("Failed to delete GPURequest: %v", err)
+	}
 
-		result, err := successfulReconciler.Reconcile(ctx, req)
-		if err != nil {
-			t.Errorf("Expected no error, got: %v", err)
-		}
-		if result != (ctrl.Result{}) {
-			t.Errorf("Expected empty result, got: %+v", result)
-		}
-	})
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      gpuRequest.Name,
+			Namespace: gpuRequest.Namespace,
+		},
+	}
+
+	result, err := reconciler.Reconcile(ctx, req)
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+	if result != (ctrl.Result{}) {
+		t.Errorf("Expected empty result, got: %+v", result)
+	}
 }
 
 func TestGPURequestController_handlePending(t *testing.T) {
