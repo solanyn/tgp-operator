@@ -30,8 +30,6 @@ jobs:
     name: Build Images
     needs: [lint, test-go]
     uses: ./.github/workflows/build-and-push-images.yml
-    with:
-      push: false
     permissions:
       contents: read
   check-release:
