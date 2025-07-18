@@ -9,6 +9,7 @@ on:
         default: runpod
         type: choice
         options: [runpod, lambdalabs, paperspace, all]
+  workflow_call:
   schedule:
     # Run E2E tests weekly on main branch
     - cron: 0 6 * * 1  # Monday 6 AM UTC
