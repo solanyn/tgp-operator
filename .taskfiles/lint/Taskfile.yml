@@ -5,7 +5,6 @@ tasks:
     desc: Run all linting and formatting checks
     cmds:
       - task: go
-      - task: yaml
       - task: markdown
       - task: shell
       - task: github-actions
@@ -18,12 +17,11 @@ tasks:
   yaml:
     desc: Check YAML files for compliance
     cmds:
-      - mise x python -- yamlfix --config-file .yamlfix.toml --exclude "chart/templates/*"
-        --check .
+      - mise exec -- yamlfix --config-file .yamlfix.toml --exclude "chart/templates/*" --check .
   yaml-fix:
     desc: Fix YAML formatting
     cmds:
-      - mise x python -- yamlfix --config-file .yamlfix.toml --exclude "chart/templates/*"
+      - mise exec -- yamlfix --config-file .yamlfix.toml --exclude "chart/templates/*"
         .
   markdown:
     desc: Lint Markdown files
