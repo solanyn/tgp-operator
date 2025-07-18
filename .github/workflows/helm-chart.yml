@@ -8,11 +8,6 @@ on:
     types: [published]
 permissions:
   contents: read
-  pages: write
-  id-token: write
-concurrency:
-  group: pages
-  cancel-in-progress: false
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
@@ -34,100 +29,39 @@ jobs:
       - name: Test chart templates
         run: |
           helm template test-release chart/ --dry-run
-  package-and-deploy:
+  package-and-push:
     needs: lint-and-test
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    if: github.event_name == 'release'
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Configure Git
-        run: |
-          git config user.name "$GITHUB_ACTOR"
-          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
       - name: Set up Helm
         uses: azure/setup-helm@v3
         with:
           version: v3.14.0
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Prepare chart version
         id: version
         run: |
-          if [[ $GITHUB_EVENT_NAME == "release" ]]; then
-            VERSION=${GITHUB_REF#refs/tags/}
-            echo "chart_version=${VERSION#v}" >> $GITHUB_OUTPUT
-            echo "app_version=${VERSION#v}" >> $GITHUB_OUTPUT
-          else
-            # For main branch, use commit SHA
-            SHORT_SHA=$(git rev-parse --short HEAD)
-            echo "chart_version=0.1.0-${SHORT_SHA}" >> $GITHUB_OUTPUT
-            echo "app_version=0.1.0-${SHORT_SHA}" >> $GITHUB_OUTPUT
-          fi
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "chart_version=${VERSION#v}" >> $GITHUB_OUTPUT
+          echo "app_version=${VERSION#v}" >> $GITHUB_OUTPUT
       - name: Update chart version
         run: |
           sed -i "s/version: .*/version: ${{ steps.version.outputs.chart_version }}/" chart/Chart.yaml
           sed -i "s/appVersion: .*/appVersion: \"${{ steps.version.outputs.app_version }}\"/" chart/Chart.yaml
-      - name: Package Helm chart
+      - name: Package and push Helm chart
         run: |
-          mkdir -p helm-charts
-          helm package chart/ --destination helm-charts/
-      - name: Generate Helm repo index
-        run: |
-          helm repo index helm-charts/ --url https://solanyn.github.io/tgp-operator/
-      - name: Create index.html
-        run: |
-          cat > helm-charts/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head>
-              <title>TGP Operator Helm Chart Repository</title>
-              <style>
-                  body { font-family: Arial, sans-serif; margin: 40px; }
-                  .header { color:  # 333; }
-                  .code { background:  # f4f4f4; padding: 10px; border-radius: 4px; }
-                  .installation { margin: 20px 0; }
-              </style>
-          </head>
-          <body>
-              <h1 class="header">TGP Operator Helm Chart Repository</h1>
-              <p>Kubernetes operator for ephemeral GPU provisioning across multiple cloud providers.</p>
-              
-              <div class="installation">
-                  <h2>Installation</h2>
-                  <p>Add the repository:</p>
-                  <div class="code">
-                      <code>helm repo add tgp-operator https://solanyn.github.io/tgp-operator/</code>
-                  </div>
-                  
-                  <p>Update your repositories:</p>
-                  <div class="code">
-                      <code>helm repo update</code>
-                  </div>
-                  
-                  <p>Install the operator:</p>
-                  <div class="code">
-                      <code>helm install tgp-operator tgp-operator/tgp-operator</code>
-                  </div>
-              </div>
-              
-              <div class="installation">
-                  <h2>Documentation</h2>
-                  <p><a href="https://github.com/solanyn/tgp-operator">GitHub Repository</a></p>
-                  <p><a href="https://github.com/solanyn/tgp-operator/blob/main/README.md">README</a></p>
-                  <p><a href="https://github.com/solanyn/tgp-operator/blob/main/DEVELOPMENT.md">Development Guide</a></p>
-              </div>
-          </body>
-          </html>
-          EOF
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: helm-charts/
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          helm package chart/
+          helm push tgp-operator-${{ steps.version.outputs.chart_version }}.tgz oci://ghcr.io/solanyn/charts
