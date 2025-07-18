@@ -49,11 +49,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix={{branch}}-,enable={{is_default_branch}}
       - name: Build image
         uses: docker/build-push-action@v5
         with:
@@ -111,11 +109,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix={{branch}}-,enable={{is_default_branch}}
       - name: Create and push manifest
         run: |-
           for tag in ${{ steps.meta.outputs.tags }}; do
