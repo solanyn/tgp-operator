@@ -9,7 +9,7 @@ op = "latest"
 python = "latest"
 svu = "latest"
 "pipx:yamlfix" = "latest"
+setup-envtest = "latest"
 
 [env]
 GOBIN = "{{config_root}}/bin"
-KUBEBUILDER_ASSETS = "{{config_root}}/bin/k8s"
