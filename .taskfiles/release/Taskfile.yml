@@ -2,7 +2,12 @@
 version: '3'
 vars:
   VERSION:
-    sh: cat VERSION 2>/dev/null || echo "0.0.1"
+    sh: |
+      if command -v svu >/dev/null 2>&1; then
+        svu next --strip-prefix
+      else
+        echo "0.1.0"
+      fi
 tasks:
   release:
     desc: Create a full release (container + chart + GitHub release)
@@ -23,22 +28,18 @@ tasks:
       - task: test:unit
       - task: chart:validate
   sync-versions:
-    desc: Update all version references to match VERSION file
+    desc: Update all version references to match svu version
     cmds:
       - echo 'Syncing version {{.VERSION}} to all files...'
-      - yq -i '.version = "{{.VERSION}}"' chart/Chart.yaml
-      - yq -i '.appVersion = "{{.VERSION}}"' chart/Chart.yaml
+      - task: :chart:sync-version
       - sed -i '' 's/--version [0-9]\+\.[0-9]\+\.[0-9]\+/--version {{.VERSION}}/g'
         README.md
       - echo 'All files updated to version {{.VERSION}}'
   tag:
     desc: Create and push git tag for current version
     prompt: This will create git tag v{{.VERSION}} and push to GitHub. Continue?
-    preconditions:
-      - sh: test -f VERSION
-        msg: "VERSION file not found. Create it with: echo '0.0.1' > VERSION"
     cmds:
-      - git add VERSION chart/Chart.yaml README.md
+      - git add chart/Chart.yaml README.md
       - "git commit -m 'chore: bump version to v{{.VERSION}}' || echo 'No changes\
         \ to commit'"
       - git tag v{{.VERSION}}
@@ -57,19 +58,19 @@ tasks:
         msg: 'GitHub CLI not found. Install with: brew install gh && gh auth login'
     cmds:
       - gh release create v{{.VERSION}} --title 'Release v{{.VERSION}}' --notes '{{.CHANGELOG}}'
-  set-version:
-    desc: Set new version in VERSION file
-    vars:
-      NEW_VERSION: '{{.NEW_VERSION | default ""}}'
-    preconditions:
-      - sh: test -n "{{.NEW_VERSION}}"
-        msg: 'Usage: task release:set-version NEW_VERSION=x.y.z'
+  next-version:
+    desc: Show what the next version would be based on conventional commits
     cmds:
-      - echo '{{.NEW_VERSION}}' > VERSION
-      - echo 'Version set to {{.NEW_VERSION}}'
-      - echo 'Run task release:sync-versions to update all files'
+      - echo 'Next version based on conventional commits:'
+      - |
+        if command -v svu >/dev/null 2>&1; then
+          echo "Current: $(svu current)"
+          echo "Next: $(svu next)"
+        else
+          echo "svu not found - install it to see semantic versions"
+        fi
   current-version:
-    desc: Show current version from VERSION file
+    desc: Show current version from svu
     cmds: ["echo 'Current version: {{.VERSION}}'"]
   prepare-release:
     desc: Prepare for release (sync versions but don't tag/release)
