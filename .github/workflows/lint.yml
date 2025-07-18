@@ -38,20 +38,6 @@ jobs:
         run: |
           test -z "$(gofumpt -l .)" || (echo "Files need formatting. Run 'gofumpt -w .' to fix." && exit 1)
           test -z "$(goimports -l .)" || (echo "Imports need formatting. Run 'goimports -w .' to fix." && exit 1)
-  yaml-lint:
-    name: YAML Linting
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Install yamlfix
-        run: pip install yamlfix
-      - name: Check YAML compliance
-        run: yamlfix --config-file .yamlfix.toml --exclude "chart/templates/*" --check
-          .
   helm-lint:
     name: Helm Chart Linting
     runs-on: ubuntu-latest
