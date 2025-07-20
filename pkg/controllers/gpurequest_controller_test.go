@@ -185,8 +185,8 @@ func TestGPURequestController_Reconcile_AddFinalizer(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
-	if !result.Requeue {
-		t.Error("Expected requeue to be true")
+	if result.RequeueAfter == 0 {
+		t.Error("Expected requeue to be requested")
 	}
 
 	var updated tgpv1.GPURequest
