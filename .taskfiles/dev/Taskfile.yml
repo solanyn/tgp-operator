@@ -20,7 +20,8 @@ tasks:
     deps: [install-codegen]
     cmds:
       - curl -s https://cloud.lambda.ai/api/v1/openapi.json > /tmp/lambda-openapi-3.1.json
-      - mise exec -- openapi-down-convert -i /tmp/lambda-openapi-3.1.json -o /tmp/lambda-openapi-3.0-converted.json
+      - npx @apiture/openapi-down-convert@latest -i /tmp/lambda-openapi-3.1.json -o
+        /tmp/lambda-openapi-3.0-converted.json
       - mkdir -p pkg/providers/lambdalabs/api
       - bin/oapi-codegen -generate "types,client" -package "api" -exclude-tags "Filesystems,SSH
         Keys" -o pkg/providers/lambdalabs/api/generated.go /tmp/lambda-openapi-3.0-converted.json

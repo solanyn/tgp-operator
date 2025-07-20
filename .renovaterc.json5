@@ -1,56 +1,72 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  
+  // Base configuration for TGP Operator dependency management
+  extends: [
     "config:recommended",
     ":semanticCommitTypeAll(chore)",
     ":automergeDigest",
     ":automergeMinor"
   ],
-  "platformAutomerge": true,
-  "timezone": "UTC",
-  "schedule": ["before 6am on monday"],
-  "labels": ["dependencies"],
-  "separateMinorPatch": true,
-  "separateMajorMinor": true,
-  "prHourlyLimit": 2,
-  "prConcurrentLimit": 5,
-  "golang": {
-    "commitMessageTopic": "Go module {{depName}}"
+  
+  // Project settings
+  platformAutomerge: true,
+  timezone: "UTC",
+  schedule: ["before 6am on monday"],
+  labels: ["dependencies"],
+  separateMinorPatch: true,
+  separateMajorMinor: true,
+  
+  // Rate limiting to avoid overwhelming CI
+  prHourlyLimit: 2,
+  prConcurrentLimit: 5,
+  
+  // Go-specific configuration
+  golang: {
+    commitMessageTopic: "Go module {{depName}}"
   },
-  "packageRules": [
+  
+  packageRules: [
     {
-      "matchDatasources": ["go"],
-      "rangeStrategy": "bump"
+      // Bump Go module versions instead of pinning
+      matchDatasources: ["go"],
+      rangeStrategy: "bump"
     },
     {
-      "matchDepNames": ["go"],
-      "rangeStrategy": "replace"
+      // Replace Go runtime version completely  
+      matchDepNames: ["go"],
+      rangeStrategy: "replace"
     },
     {
-      "matchPackagePatterns": ["^k8s.io"],
-      "groupName": "kubernetes packages",
-      "automerge": false
+      // Group Kubernetes core packages (manual review required)
+      matchPackagePatterns: ["^k8s.io"],
+      groupName: "kubernetes packages",
+      automerge: false
     },
     {
-      "matchPackagePatterns": ["^sigs.k8s.io"],
-      "groupName": "kubernetes sig packages",
-      "automerge": false
+      // Group Kubernetes SIG packages (manual review required)
+      matchPackagePatterns: ["^sigs.k8s.io"],
+      groupName: "kubernetes sig packages", 
+      automerge: false
     },
     {
-      "matchUpdateTypes": ["minor", "patch"],
-      "matchCurrentVersion": "!/^0/",
-      "automerge": true
+      // Auto-merge stable minor/patch updates (not pre-release)
+      matchUpdateTypes: ["minor", "patch"],
+      matchCurrentVersion: "!/^0/",
+      automerge: true
     },
     {
-      "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["minor", "patch"],
-      "automerge": true
+      // Auto-merge GitHub Actions minor/patch updates
+      matchManagers: ["github-actions"],
+      matchUpdateTypes: ["minor", "patch"],
+      automerge: true
     },
     {
-      "matchManagers": ["asdf"],
-      "commitMessageTopic": "tool {{depName}}",
-      "automerge": true,
-      "labels": ["mise-update"]
+      // Auto-merge mise tool updates (formerly asdf)
+      matchManagers: ["asdf"],
+      commitMessageTopic: "tool {{depName}}",
+      automerge: true,
+      labels: ["mise-update"]
     }
   ]
 }

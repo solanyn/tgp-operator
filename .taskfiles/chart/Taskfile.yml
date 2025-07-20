@@ -50,7 +50,7 @@ tasks:
       VERSION:
         sh: |
           if command -v svu >/dev/null 2>&1; then
-            svu next --strip-prefix
+            svu next | sed 's/^v//'
           else
             echo "0.1.0"
           fi
@@ -67,7 +67,7 @@ tasks:
       VERSION:
         sh: |
           if command -v svu >/dev/null 2>&1; then
-            svu next --strip-prefix
+            svu next | sed 's/^v//'
           else
             echo "0.1.0"
           fi
@@ -76,6 +76,26 @@ tasks:
       - helm package {{.CHART_DIR}} --destination dist/
       - helm push dist/tgp-operator-{{.VERSION}}.tgz {{.CHART_REPO}}
       - echo "Pushed chart {{.CHART_REPO}}/tgp-operator:{{.VERSION}}"
+  push-oci-signed:
+    desc: Push and sign Helm chart as OCI artifact to GHCR
+    deps: [validate, sync-version]
+    vars:
+      VERSION:
+        sh: |
+          if command -v svu >/dev/null 2>&1; then
+            svu next | sed 's/^v//'
+          else
+            echo "0.1.0"
+          fi
+      CHART_REPO: oci://ghcr.io/solanyn/charts
+    cmds:
+      - helm package {{.CHART_DIR}} --destination dist/
+      - helm push dist/tgp-operator-{{.VERSION}}.tgz {{.CHART_REPO}} > dist/push-metadata.txt
+      - |
+        CHART_DIGEST=$(awk '/Digest: /{print $2}' dist/push-metadata.txt)
+        echo "Chart pushed with digest: ${CHART_DIGEST}"
+        cosign sign -y "ghcr.io/solanyn/charts/tgp-operator@${CHART_DIGEST}"
+        echo "Chart signed: ghcr.io/solanyn/charts/tgp-operator@${CHART_DIGEST}"
   install:
     desc: Install chart to current cluster
     cmds:
@@ -88,3 +108,19 @@ tasks:
     desc: Debug chart templates
     cmds:
       - helm template tgp-operator {{.CHART_DIR}} --debug --namespace tgp-system
+  verify-signature:
+    desc: Verify signed chart from GHCR
+    vars:
+      VERSION:
+        sh: |
+          if command -v svu >/dev/null 2>&1; then
+            svu current | sed 's/^v//'
+          else
+            echo "0.1.0"
+          fi
+    cmds:
+      - |-
+        echo "Verifying chart signature for version {{.VERSION}}"
+        cosign verify "ghcr.io/solanyn/charts/tgp-operator:{{.VERSION}}" \
+          --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+          --certificate-identity "https://github.com/solanyn/tgp-operator/.github/workflows/helm-chart.yml@refs/heads/main"

@@ -4,7 +4,7 @@ vars:
   VERSION:
     sh: |
       if command -v svu >/dev/null 2>&1; then
-        svu next --strip-prefix
+        svu next | sed 's/^v//'
       else
         echo "0.1.0"
       fi
@@ -34,12 +34,18 @@ tasks:
       - task: :chart:sync-version
       - sed -i '' 's/--version [0-9]\+\.[0-9]\+\.[0-9]\+/--version {{.VERSION}}/g'
         README.md
+      - task: changelog
       - echo 'All files updated to version {{.VERSION}}'
+  changelog:
+    desc: Generate or update CHANGELOG.md using git-chglog
+    cmds:
+      - mise exec -- git-chglog --output CHANGELOG.md
+      - echo 'CHANGELOG.md updated'
   tag:
     desc: Create and push git tag for current version
     prompt: This will create git tag v{{.VERSION}} and push to GitHub. Continue?
     cmds:
-      - git add chart/Chart.yaml README.md
+      - git add chart/Chart.yaml README.md CHANGELOG.md
       - "git commit -m 'chore: bump version to v{{.VERSION}}' || echo 'No changes\
         \ to commit'"
       - git tag v{{.VERSION}}
@@ -47,12 +53,11 @@ tasks:
       - git push origin v{{.VERSION}}
       - echo 'Tagged and pushed v{{.VERSION}}'
   github-release:
-    desc: Create GitHub release with simple changelog
+    desc: Create GitHub release with generated changelog
     prompt: This will create GitHub release v{{.VERSION}}. Continue?
     vars:
       CHANGELOG:
-        sh: git log --oneline $(git describe --tags --abbrev=0 2>/dev/null || echo
-          "HEAD~10")..HEAD --pretty=format:"- %s" 2>/dev/null || echo "Initial release"
+        sh: mise exec -- git-chglog --next-tag v{{.VERSION}} v{{.VERSION}}
     preconditions:
       - sh: command -v gh
         msg: 'GitHub CLI not found. Install with: brew install gh && gh auth login'

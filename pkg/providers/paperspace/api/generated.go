@@ -1092,7 +1092,7 @@ type DatasetsCreateJSONBody struct {
 	Description *DatasetsCreateJSONBody_Description `json:"description"`
 
 	// IsPublic Whether the dataset is public
-	IsPublic *bool `json:"isPublic,omitempty"`
+	IsPublic bool `json:"isPublic"`
 
 	// Name The name of the dataset
 	Name string `json:"name"`
