@@ -51,6 +51,7 @@ type GPURequestReconciler struct {
 // +kubebuilder:rbac:groups=tgp.io,resources=gpurequests/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups=tailscale.com,resources=connectors,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -797,15 +798,17 @@ func (r *GPURequestReconciler) executeLaunchRequest(
 	provider providers.ProviderClient,
 	_ logr.Logger,
 ) (*providers.GPUInstance, error) {
-	// Resolve any secret references in WireGuardConfig
-	resolvedWireGuardConfig, err := gpuRequest.Spec.TalosConfig.WireGuardConfig.Resolve(ctx, r.Client, gpuRequest.Namespace)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve WireGuard config secrets: %w", err)
-	}
-
 	// Create resolved TalosConfig
 	resolvedTalosConfig := gpuRequest.Spec.TalosConfig
-	resolvedTalosConfig.WireGuardConfig = *resolvedWireGuardConfig
+
+	// Resolve Tailscale configuration secrets
+	resolvedTailscaleConfig, err := gpuRequest.Spec.TalosConfig.TailscaleConfig.Resolve(ctx, r.Client, gpuRequest.Namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve Tailscale config secrets: %w", err)
+	}
+	if resolvedTailscaleConfig != nil {
+		resolvedTalosConfig.TailscaleConfig = *resolvedTailscaleConfig
+	}
 
 	launchReq := &providers.LaunchRequest{
 		GPUType:      gpuRequest.Spec.GPUType,

@@ -156,12 +156,9 @@ func createTestGPURequest(name string) *tgpv1.GPURequest {
 			GPUType:  "RTX3090",
 			TalosConfig: tgpv1.TalosConfig{
 				Image: "factory.talos.dev/installer/test:v1.8.2",
-				WireGuardConfig: tgpv1.WireGuardConfig{
-					PrivateKey:     "test-private-key",
-					PublicKey:      "test-public-key",
-					ServerEndpoint: "vpn.example.com:51820",
-					AllowedIPs:     []string{"10.0.0.0/24"},
-					Address:        "10.0.0.2/24",
+				TailscaleConfig: tgpv1.TailscaleConfig{
+					Hostname: "test-gpu-node",
+					Tags:     []string{"tag:k8s"},
 				},
 			},
 		},

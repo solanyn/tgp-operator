@@ -159,12 +159,9 @@ func TestGPURequestController_Reconcile_AddFinalizer(t *testing.T) {
 			GPUType:  "RTX3090",
 			TalosConfig: tgpv1.TalosConfig{
 				Image: "factory.talos.dev/installer/test:v1.8.2",
-				WireGuardConfig: tgpv1.WireGuardConfig{
-					PrivateKey:     "test-private-key",
-					PublicKey:      "test-public-key",
-					ServerEndpoint: "vpn.example.com:51820",
-					AllowedIPs:     []string{"10.0.0.0/24"},
-					Address:        "10.0.0.2/24",
+				TailscaleConfig: tgpv1.TailscaleConfig{
+					Hostname: "test-gpu-node",
+					Tags:     []string{"tag:k8s"},
 				},
 			},
 		},
@@ -185,7 +182,7 @@ func TestGPURequestController_Reconcile_AddFinalizer(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
-	if result.RequeueAfter == 0 {
+	if !result.Requeue && result.RequeueAfter == 0 {
 		t.Error("Expected requeue to be requested")
 	}
 

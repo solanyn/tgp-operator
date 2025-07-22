@@ -1,12 +1,13 @@
 # Talos GPU Provisioner
 
-Kubernetes operator for ephemeral GPU provisioning across multiple cloud providers.
+Kubernetes operator for ephemeral GPU provisioning across multiple cloud providers with Tailscale mesh networking.
 
-Addresses intermittent GPU compute needs by provisioning instances on-demand from cloud providers and automatically integrating them into existing Talos Kubernetes clusters. Designed for workloads that require GPU resources occasionally rather than continuously.
+Addresses intermittent GPU compute needs by provisioning instances on-demand from cloud providers and automatically integrating them into existing Talos Kubernetes clusters via Tailscale. Designed for workloads that require GPU resources occasionally rather than continuously.
 
 ## Features
 
 - **Multi-cloud support** - RunPod, Lambda Labs and Paperspace
+- **Tailscale mesh networking** - Automatic node integration via Tailscale (no VPN server needed)
 - **Cost optimization** - Automatic provider selection based on real-time pricing
 - **Secure credentials** - 1Password CLI integration for secret management
 - **Lifecycle management** - Automated provisioning, configuration and cleanup
@@ -19,19 +20,40 @@ Addresses intermittent GPU compute needs by provisioning instances on-demand fro
 
 ### Prerequisites
 
-This operator requires significant infrastructure setup:
+This operator requires the following infrastructure:
 
 - **Talos Kubernetes cluster** - See [Talos documentation](https://www.talos.dev/latest/introduction/getting-started/) for cluster setup
-- **WireGuard server** - For secure node-to-cluster networking (VPS, homelab, or cloud instance)
+- **Tailscale Operator** - For mesh networking and automatic node integration
 - **Cloud provider API keys** - From supported providers (RunPod, Lambda Labs, Paperspace)
-- **Network configuration** - Proper routing and firewall rules
+- **Tailscale OAuth credentials** - For device management and auth key creation
+
+### Setup Tailscale
+
+First, set up the Tailscale Operator in your cluster:
+
+```bash
+# 1. Create Tailscale OAuth client at https://login.tailscale.com/admin/settings/oauth
+# 2. Grant device management permissions and tag:k8s-operator tag
+
+# Install Tailscale Operator
+helm repo add tailscale https://pkgs.tailscale.com/helmcharts
+helm install tailscale-operator tailscale/tailscale-operator \
+  --namespace=tailscale \
+  --create-namespace \
+  --set-string oauth.clientId="your-client-id" \
+  --set-string oauth.clientSecret="your-client-secret"
+
+# Expose Kubernetes API via Tailscale
+kubectl annotate service kubernetes tailscale.com/expose=true
+kubectl annotate service kubernetes tailscale.com/hostname=k8s-api
+```
 
 ### Install Operator
 
-Once your infrastructure is ready:
+Once Tailscale is configured:
 
 ```bash
-# Install the operator
+# Install the TGP operator
 helm install tgp-operator oci://ghcr.io/solanyn/charts/tgp-operator \
   --namespace tgp-system \
   --create-namespace
@@ -49,7 +71,7 @@ kubectl create secret generic tgp-secret \
   -n tgp-system
 ```
 
-> **Note**: For complete setup instructions including Talos cluster deployment, WireGuard server configuration, and network setup, see [DEVELOPMENT.md](DEVELOPMENT.md).
+> **Note**: For complete setup instructions including Talos cluster deployment, Tailscale configuration, and network setup, see [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ### Usage
 
@@ -67,33 +89,28 @@ spec:
   maxHourlyPrice: "2.0"
   talosConfig:
     image: factory.talos.dev/installer/test:v1.8.2
-    wireGuardConfig:
-      privateKey: your-private-key
-      publicKey: your-public-key
-      serverEndpoint: vpn.example.com:51820
-      allowedIPs: ["10.0.0.0/24"]
-      address: 10.0.0.2/24
+    tailscaleConfig:
+      hostname: my-gpu-node
+      tags: ["tag:k8s"]
+      ephemeral: true
+      acceptRoutes: true
 ```
 
-#### WireGuard with Secrets
+#### Tailscale with Auth Keys
 
-For sensitive WireGuard configuration, use Kubernetes secrets:
+For production deployments, use Tailscale auth keys stored in Kubernetes secrets:
 
 ```yaml
-# Create WireGuard secret
+# Create Tailscale auth key secret
 apiVersion: v1
 kind: Secret
 metadata:
-  name: wireguard-config
+  name: tailscale-auth
 type: Opaque
 stringData:
-  private-key: your-private-key
-  public-key: your-public-key
-  server-endpoint: vpn.example.com:51820
-  allowed-ips: 10.0.0.0/24
-  address: 10.0.0.2/24
+  auth-key: tskey-auth-your-key-here
 ---
-# GPU request using secret references
+# GPU request using auth key secret
 apiVersion: tgp.io/v1
 kind: GPURequest
 metadata:
@@ -104,22 +121,14 @@ spec:
   region: us-west
   talosConfig:
     image: factory.talos.dev/installer/test:v1.8.2
-    wireGuardConfig:
-      privateKeySecretRef:
-        name: wireguard-config
-        key: private-key
-      publicKeySecretRef:
-        name: wireguard-config
-        key: public-key
-      serverEndpointSecretRef:
-        name: wireguard-config
-        key: server-endpoint
-      allowedIPsSecretRef:
-        name: wireguard-config
-        key: allowed-ips
-      addressSecretRef:
-        name: wireguard-config
-        key: address
+    tailscaleConfig:
+      hostname: secure-gpu-node
+      tags: ["tag:k8s", "tag:gpu"]
+      ephemeral: true
+      acceptRoutes: true
+      authKeySecretRef:
+        name: tailscale-auth
+        key: auth-key
 ```
 
 #### Check Status

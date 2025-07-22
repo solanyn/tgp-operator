@@ -85,62 +85,25 @@ spec:
                     image:
                       description: Image specifies the Talos image to use
                       type: string
-                    wireGuardConfig:
-                      description: WireGuardConfig contains VPN configuration for
-                        cluster connectivity
+                    tailscaleConfig:
+                      description: TailscaleConfig contains Tailscale mesh networking
+                        configuration
                       properties:
-                        address:
+                        acceptRoutes:
                           description: |-
-                            Address is the VPN IP address for this node
-                            Can be specified directly or via AddressSecretRef
-                          type: string
-                        addressSecretRef:
-                          description: AddressSecretRef references a secret containing
-                            the VPN address
-                          properties:
-                            key:
-                              description: Key is the key within the secret
-                              type: string
-                            name:
-                              description: Name is the name of the secret
-                              type: string
-                            namespace:
-                              description: Namespace is the namespace of the secret
-                                (optional, defaults to GPURequest namespace)
-                              type: string
-                          required: [key, name]
-                          type: object
-                        allowedIPs:
-                          description: |-
-                            AllowedIPs specifies allowed IP ranges through the VPN
-                            Can be specified directly or via AllowedIPsSecretRef
+                            AcceptRoutes indicates whether to accept routes from other devices in the tailnet
+                            Default: true
+                          type: boolean
+                        advertiseRoutes:
+                          description: AdvertiseRoutes specifies subnet routes to
+                            advertise (for gateway nodes)
                           items:
                             type: string
                           type: array
-                        allowedIPsSecretRef:
-                          description: AllowedIPsSecretRef references a secret containing
-                            allowed IPs (comma-separated)
-                          properties:
-                            key:
-                              description: Key is the key within the secret
-                              type: string
-                            name:
-                              description: Name is the name of the secret
-                              type: string
-                            namespace:
-                              description: Namespace is the namespace of the secret
-                                (optional, defaults to GPURequest namespace)
-                              type: string
-                          required: [key, name]
-                          type: object
-                        privateKey:
+                        authKeySecretRef:
                           description: |-
-                            PrivateKey is the WireGuard private key for the node
-                            Can be specified directly or via PrivateKeySecretRef
-                          type: string
-                        privateKeySecretRef:
-                          description: PrivateKeySecretRef references a secret containing
-                            the private key
+                            AuthKeySecretRef references a secret containing the Tailscale auth key
+                            Required if not using OAuth client credentials
                           properties:
                             key:
                               description: Key is the key within the secret
@@ -154,50 +117,59 @@ spec:
                               type: string
                           required: [key, name]
                           type: object
-                        publicKey:
+                        ephemeral:
                           description: |-
-                            PublicKey is the WireGuard public key for the node
-                            Can be specified directly or via PublicKeySecretRef
+                            Ephemeral indicates whether the device should be ephemeral (cleanup on deletion)
+                            Default: true
+                          type: boolean
+                        hostname:
+                          description: Hostname for the Tailscale device (optional,
+                            defaults to generated name)
                           type: string
-                        publicKeySecretRef:
-                          description: PublicKeySecretRef references a secret containing
-                            the public key
+                        operatorConfig:
+                          description: OperatorConfig contains Tailscale Operator
+                            integration settings
                           properties:
-                            key:
-                              description: Key is the key within the secret
-                              type: string
-                            name:
-                              description: Name is the name of the secret
-                              type: string
-                            namespace:
-                              description: Namespace is the namespace of the secret
-                                (optional, defaults to GPURequest namespace)
-                              type: string
-                          required: [key, name]
+                            connectorEnabled:
+                              description: |-
+                                ConnectorEnabled indicates whether to create a Tailscale Connector CRD
+                                Default: true
+                              type: boolean
+                            connectorSpec:
+                              description: ConnectorSpec allows customization of the
+                                Connector CRD
+                              properties:
+                                appConnector:
+                                  description: AppConnector configures the node as
+                                    an app connector
+                                  type: boolean
+                                exitNode:
+                                  description: ExitNode configures the node as an
+                                    exit node
+                                  type: boolean
+                                subnetRouter:
+                                  description: SubnetRouter configures the node as
+                                    a subnet router
+                                  properties:
+                                    advertiseRoutes:
+                                      description: AdvertiseRoutes specifies the subnet
+                                        routes to advertise
+                                      items:
+                                        type: string
+                                      type: array
+                                  required: [advertiseRoutes]
+                                  type: object
+                              type: object
                           type: object
-                        serverEndpoint:
+                        tags:
                           description: |-
-                            ServerEndpoint is the WireGuard server endpoint
-                            Can be specified directly or via ServerEndpointSecretRef
-                          type: string
-                        serverEndpointSecretRef:
-                          description: ServerEndpointSecretRef references a secret
-                            containing the server endpoint
-                          properties:
-                            key:
-                              description: Key is the key within the secret
-                              type: string
-                            name:
-                              description: Name is the name of the secret
-                              type: string
-                            namespace:
-                              description: Namespace is the namespace of the secret
-                                (optional, defaults to GPURequest namespace)
-                              type: string
-                          required: [key, name]
-                          type: object
+                            Tags to apply to the device for ACL targeting
+                            Default: ["tag:k8s"]
+                          items:
+                            type: string
+                          type: array
                       type: object
-                  required: [image, wireGuardConfig]
+                  required: [image, tailscaleConfig]
                   type: object
               required: [gpuType, provider, talosConfig]
               type: object

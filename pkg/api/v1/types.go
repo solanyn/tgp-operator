@@ -47,46 +47,76 @@ type TalosConfig struct {
 	// Image specifies the Talos image to use
 	Image string `json:"image"`
 
-	// WireGuardConfig contains VPN configuration for cluster connectivity
-	WireGuardConfig WireGuardConfig `json:"wireGuardConfig"`
+	// TailscaleConfig contains Tailscale mesh networking configuration
+	TailscaleConfig TailscaleConfig `json:"tailscaleConfig"`
 }
 
-// WireGuardConfig contains WireGuard VPN configuration
-type WireGuardConfig struct {
-	// PrivateKey is the WireGuard private key for the node
-	// Can be specified directly or via PrivateKeySecretRef
-	PrivateKey string `json:"privateKey,omitempty"`
+// TailscaleConfig contains Tailscale mesh networking configuration
+type TailscaleConfig struct {
+	// Hostname for the Tailscale device (optional, defaults to generated name)
+	// +optional
+	Hostname string `json:"hostname,omitempty"`
 
-	// PrivateKeySecretRef references a secret containing the private key
-	PrivateKeySecretRef *SecretKeyRef `json:"privateKeySecretRef,omitempty"`
+	// Tags to apply to the device for ACL targeting
+	// Default: ["tag:k8s"]
+	// +optional
+	Tags []string `json:"tags,omitempty"`
 
-	// PublicKey is the WireGuard public key for the node
-	// Can be specified directly or via PublicKeySecretRef
-	PublicKey string `json:"publicKey,omitempty"`
+	// Ephemeral indicates whether the device should be ephemeral (cleanup on deletion)
+	// Default: true
+	// +optional
+	Ephemeral *bool `json:"ephemeral,omitempty"`
 
-	// PublicKeySecretRef references a secret containing the public key
-	PublicKeySecretRef *SecretKeyRef `json:"publicKeySecretRef,omitempty"`
+	// AcceptRoutes indicates whether to accept routes from other devices in the tailnet
+	// Default: true
+	// +optional
+	AcceptRoutes *bool `json:"acceptRoutes,omitempty"`
 
-	// ServerEndpoint is the WireGuard server endpoint
-	// Can be specified directly or via ServerEndpointSecretRef
-	ServerEndpoint string `json:"serverEndpoint,omitempty"`
+	// AdvertiseRoutes specifies subnet routes to advertise (for gateway nodes)
+	// +optional
+	AdvertiseRoutes []string `json:"advertiseRoutes,omitempty"`
 
-	// ServerEndpointSecretRef references a secret containing the server endpoint
-	ServerEndpointSecretRef *SecretKeyRef `json:"serverEndpointSecretRef,omitempty"`
+	// AuthKeySecretRef references a secret containing the Tailscale auth key
+	// Required if not using OAuth client credentials
+	// +optional
+	AuthKeySecretRef *SecretKeyRef `json:"authKeySecretRef,omitempty"`
 
-	// AllowedIPs specifies allowed IP ranges through the VPN
-	// Can be specified directly or via AllowedIPsSecretRef
-	AllowedIPs []string `json:"allowedIPs,omitempty"`
+	// OperatorConfig contains Tailscale Operator integration settings
+	// +optional
+	OperatorConfig *TailscaleOperatorConfig `json:"operatorConfig,omitempty"`
+}
 
-	// AllowedIPsSecretRef references a secret containing allowed IPs (comma-separated)
-	AllowedIPsSecretRef *SecretKeyRef `json:"allowedIPsSecretRef,omitempty"`
+// TailscaleOperatorConfig contains Tailscale Operator specific configuration
+type TailscaleOperatorConfig struct {
+	// ConnectorEnabled indicates whether to create a Tailscale Connector CRD
+	// Default: true
+	// +optional
+	ConnectorEnabled *bool `json:"connectorEnabled,omitempty"`
 
-	// Address is the VPN IP address for this node
-	// Can be specified directly or via AddressSecretRef
-	Address string `json:"address,omitempty"`
+	// ConnectorSpec allows customization of the Connector CRD
+	// +optional
+	ConnectorSpec *TailscaleConnectorSpec `json:"connectorSpec,omitempty"`
+}
 
-	// AddressSecretRef references a secret containing the VPN address
-	AddressSecretRef *SecretKeyRef `json:"addressSecretRef,omitempty"`
+// TailscaleConnectorSpec contains Tailscale Connector CRD configuration
+type TailscaleConnectorSpec struct {
+	// SubnetRouter configures the node as a subnet router
+	// +optional
+	SubnetRouter *TailscaleSubnetRouter `json:"subnetRouter,omitempty"`
+
+	// ExitNode configures the node as an exit node
+	// +optional
+	ExitNode *bool `json:"exitNode,omitempty"`
+
+	// AppConnector configures the node as an app connector
+	// +optional
+	AppConnector *bool `json:"appConnector,omitempty"`
+}
+
+// TailscaleSubnetRouter contains subnet router configuration
+type TailscaleSubnetRouter struct {
+	// AdvertiseRoutes specifies the subnet routes to advertise
+	AdvertiseRoutes []string `json:"advertiseRoutes"`
 }
 
 // SecretKeyRef references a specific key in a Kubernetes secret
@@ -251,4 +281,53 @@ func (req *GPURequest) TimeUntilTermination() *metav1.Duration {
 		return &metav1.Duration{Duration: 0}
 	}
 	return &metav1.Duration{Duration: remaining}
+}
+
+// TailscaleConfig helper methods
+
+// GetHostname returns the hostname or a generated default
+func (tc *TailscaleConfig) GetHostname(fallback string) string {
+	if tc.Hostname != "" {
+		return tc.Hostname
+	}
+	return fallback
+}
+
+// GetTags returns the tags or default tags
+func (tc *TailscaleConfig) GetTags() []string {
+	if len(tc.Tags) > 0 {
+		return tc.Tags
+	}
+	return []string{"tag:k8s"}
+}
+
+// GetEphemeral returns the ephemeral setting or default (true)
+func (tc *TailscaleConfig) GetEphemeral() bool {
+	if tc.Ephemeral != nil {
+		return *tc.Ephemeral
+	}
+	return true
+}
+
+// GetAcceptRoutes returns the accept routes setting or default (true)
+func (tc *TailscaleConfig) GetAcceptRoutes() bool {
+	if tc.AcceptRoutes != nil {
+		return *tc.AcceptRoutes
+	}
+	return true
+}
+
+// GetConnectorEnabled returns whether Connector CRD should be created
+func (tc *TailscaleConfig) GetConnectorEnabled() bool {
+	if tc.OperatorConfig != nil && tc.OperatorConfig.ConnectorEnabled != nil {
+		return *tc.OperatorConfig.ConnectorEnabled
+	}
+	return true
+}
+
+// TalosConfig helper methods
+
+// GetNetworkingBackend returns the networking backend being used
+func (tc *TalosConfig) GetNetworkingBackend() string {
+	return "tailscale"
 }
