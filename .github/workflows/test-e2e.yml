@@ -10,6 +10,12 @@ on:
         type: choice
         options: [runpod, lambdalabs, paperspace, all]
   workflow_call:
+    inputs:
+      provider:
+        description: Provider to test (runpod, lambdalabs, paperspace, all)
+        required: false
+        default: runpod
+        type: string
   schedule:
     # Run E2E tests weekly on main branch
     - cron: 0 6 * * 1  # Monday 6 AM UTC
@@ -84,15 +90,15 @@ jobs:
       - name: Test provider connectivity
         run: |
           echo "Testing provider API connectivity..."
-          if [[ "${{ github.event.inputs.provider }}" == "all" || "${{ github.event.inputs.provider }}" == "runpod" ]]; then
+          if [[ "${{ inputs.provider || github.event.inputs.provider }}" == "all" || "${{ inputs.provider || github.event.inputs.provider }}" == "runpod" ]]; then
             echo "Testing RunPod..."
             go run cmd/test-providers/main.go -provider=runpod -action=info
           fi
-          if [[ "${{ github.event.inputs.provider }}" == "all" || "${{ github.event.inputs.provider }}" == "lambdalabs" ]]; then
+          if [[ "${{ inputs.provider || github.event.inputs.provider }}" == "all" || "${{ inputs.provider || github.event.inputs.provider }}" == "lambdalabs" ]]; then
             echo "Testing Lambda Labs..."
             go run cmd/test-providers/main.go -provider=lambdalabs -action=info
           fi
-          if [[ "${{ github.event.inputs.provider }}" == "all" || "${{ github.event.inputs.provider }}" == "paperspace" ]]; then
+          if [[ "${{ inputs.provider || github.event.inputs.provider }}" == "all" || "${{ inputs.provider || github.event.inputs.provider }}" == "paperspace" ]]; then
             echo "Testing Paperspace..."
             go run cmd/test-providers/main.go -provider=paperspace -action=info
           fi
@@ -110,17 +116,17 @@ jobs:
           echo "Testing real provider API endpoints (no instance launches)..."
 
           # Test all selected providers
-          if [[ "${{ github.event.inputs.provider }}" == "all" || "${{ github.event.inputs.provider }}" == "runpod" ]]; then
+          if [[ "${{ inputs.provider || github.event.inputs.provider }}" == "all" || "${{ inputs.provider || github.event.inputs.provider }}" == "runpod" ]]; then
             echo "=== Testing RunPod API ==="
             go run cmd/test-providers/main.go -provider=runpod -action=list -gpu-type=RTX3090 -region=US-TX-Dal
             go run cmd/test-providers/main.go -provider=runpod -action=pricing -gpu-type=RTX3090 -region=US-TX-Dal
           fi
-          if [[ "${{ github.event.inputs.provider }}" == "all" || "${{ github.event.inputs.provider }}" == "lambdalabs" ]]; then
+          if [[ "${{ inputs.provider || github.event.inputs.provider }}" == "all" || "${{ inputs.provider || github.event.inputs.provider }}" == "lambdalabs" ]]; then
             echo "=== Testing Lambda Labs API ==="
             go run cmd/test-providers/main.go -provider=lambdalabs -action=list -gpu-type=RTX3090
             go run cmd/test-providers/main.go -provider=lambdalabs -action=pricing -gpu-type=RTX3090
           fi
-          if [[ "${{ github.event.inputs.provider }}" == "all" || "${{ github.event.inputs.provider }}" == "paperspace" ]]; then
+          if [[ "${{ inputs.provider || github.event.inputs.provider }}" == "all" || "${{ inputs.provider || github.event.inputs.provider }}" == "paperspace" ]]; then
             echo "=== Testing Paperspace API ==="
             go run cmd/test-providers/main.go -provider=paperspace -action=list -gpu-type=RTX4000
             go run cmd/test-providers/main.go -provider=paperspace -action=pricing -gpu-type=RTX4000
@@ -132,7 +138,7 @@ jobs:
       - name: Test controller workflow - Success case
         run: |
           echo "Testing controller workflow with valid request (should find GPUs, not launch)..."
-          PROVIDER="${{ github.event.inputs.provider }}"
+          PROVIDER="${{ inputs.provider || github.event.inputs.provider }}"
           if [[ "$PROVIDER" == "all" ]]; then
             PROVIDER="runpod"
           fi
