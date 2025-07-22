@@ -2,7 +2,7 @@
 golang = "1.24.5"
 task = "3.35.1"
 kubectl = "1.28.15"
-helm = "3.14.4"
+helm = "3.18.4"
 node = "22.14.0"
 "npm:@apiture/openapi-down-convert" = "latest"
 op = "latest"
