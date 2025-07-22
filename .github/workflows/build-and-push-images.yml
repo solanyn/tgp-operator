@@ -43,8 +43,8 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern=v{{version}}
           labels: |
-            org.opencontainers.image.title=TGP Operator
-            org.opencontainers.image.description=Kubernetes operator for ephemeral GPU provisioning
+            org.opencontainers.image.title=tgp-operator
+            org.opencontainers.image.description=Kubernetes operator for ephemeral GPU provisioning with Tailscale mesh networking
             org.opencontainers.image.vendor=solanyn
       - name: Build and push multi-platform image
         uses: docker/build-push-action@v5

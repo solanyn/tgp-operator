@@ -32,6 +32,7 @@ jobs:
     uses: ./.github/workflows/build-and-push-images.yml
     permissions:
       contents: read
+      packages: write
   check-release:
     name: Check for Release
     runs-on: ubuntu-latest
