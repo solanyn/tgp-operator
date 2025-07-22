@@ -35,31 +35,20 @@ jobs:
         run: |
           curl -sL https://talos.dev/install | sh
           sudo mv talosctl /usr/local/bin/
-      - name: Setup WireGuard on runner
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          tags: tag:ci-runner
+          hostname: github-runner-${{ github.run_id }}
+      - name: Verify Tailscale connectivity
         run: |
-          sudo apt-get update
-          sudo apt-get install -y wireguard-tools
-
-          # Generate WireGuard keypairs
-          wg genkey | sudo tee /etc/wireguard/server-private.key
-          sudo cat /etc/wireguard/server-private.key | wg pubkey | sudo tee /etc/wireguard/server-public.key
-          wg genkey | sudo tee /etc/wireguard/client-private.key
-          sudo cat /etc/wireguard/client-private.key | wg pubkey | sudo tee /etc/wireguard/client-public.key
-
-          # Create WireGuard server config
-          sudo tee /etc/wireguard/wg0.conf << EOF
-          [Interface]
-          PrivateKey = $(sudo cat /etc/wireguard/server-private.key)
-          Address = 10.0.0.1/24
-          ListenPort = 51820
-          [Peer]
-          PublicKey = $(sudo cat /etc/wireguard/client-public.key)
-          AllowedIPs = 10.0.0.2/32
-          EOF
-
-          # Start WireGuard
-          sudo wg-quick up wg0
-          sudo wg show
+          echo "Tailscale status:"
+          tailscale status
+          echo "Testing connectivity to tailnet..."
+          # Test if we can reach other tailscale nodes (if any)
+          tailscale ping --timeout=5s $(tailscale status --json | jq -r '.Self.TailscaleIPs[0]') || true
       - name: Create Talos cluster
         run: |
           talosctl cluster create --provisioner docker --name e2e-test --wait --workers 1
@@ -79,13 +68,9 @@ jobs:
             --from-literal=paperspace-api-key="${{ secrets.PAPERSPACE_API_KEY }}" \
             -n tgp-system
 
-          # Create WireGuard test secrets
-          kubectl create secret generic wireguard-test-config \
-            --from-literal=private-key="$(sudo cat /etc/wireguard/client-private.key)" \
-            --from-literal=public-key="$(sudo cat /etc/wireguard/client-public.key)" \
-            --from-literal=server-endpoint="127.0.0.1:51820" \
-            --from-literal=allowed-ips="10.0.0.0/24" \
-            --from-literal=address="10.0.0.2/24" \
+          # Create Tailscale test auth key secret (for GPU nodes to connect)
+          kubectl create secret generic tailscale-auth \
+            --from-literal=auth-key="${{ secrets.TAILSCALE_E2E_AUTH_KEY }}" \
             -n tgp-system
       - name: Test provider connectivity
         run: |
@@ -155,26 +140,14 @@ jobs:
             maxHourlyPrice: "0.01"  # Too low to actually launch
             talosConfig:
               image: "factory.talos.dev/installer/test:v1.8.2"
-              wireGuardConfig:
-                privateKeySecretRef:
-                  name: wireguard-test-config
-                  key: private-key
-                  namespace: tgp-system
-                publicKeySecretRef:
-                  name: wireguard-test-config
-                  key: public-key
-                  namespace: tgp-system
-                serverEndpointSecretRef:
-                  name: wireguard-test-config
-                  key: server-endpoint
-                  namespace: tgp-system
-                allowedIPsSecretRef:
-                  name: wireguard-test-config
-                  key: allowed-ips
-                  namespace: tgp-system
-                addressSecretRef:
-                  name: wireguard-test-config
-                  key: address
+              tailscaleConfig:
+                hostname: "e2e-gpu-node"
+                tags: ["tag:ci-runner", "tag:gpu-node"]
+                ephemeral: true
+                acceptRoutes: true
+                authKeySecretRef:
+                  name: tailscale-auth
+                  key: auth-key
                   namespace: tgp-system
           EOF
           echo "Waiting for controller to process request..."
@@ -199,12 +172,10 @@ jobs:
             region: us-east-1
             talosConfig:
               image: "factory.talos.dev/installer/test:v1.8.2"
-              wireGuardConfig:
-                privateKey: "fake-private-key"
-                publicKey: "fake-public-key"
-                serverEndpoint: "127.0.0.1:51820"
-                allowedIPs: ["10.0.0.0/24"]
-                address: "10.0.0.2/24"
+              tailscaleConfig:
+                hostname: "e2e-test-node"
+                tags: ["tag:ci-runner"]
+                ephemeral: true
           EOF
 
           # Test 2: Invalid region
@@ -220,15 +191,13 @@ jobs:
             region: nonexistent-region-12345
             talosConfig:
               image: "factory.talos.dev/installer/test:v1.8.2"
-              wireGuardConfig:
-                privateKey: "fake-private-key"
-                publicKey: "fake-public-key"
-                serverEndpoint: "127.0.0.1:51820"
-                allowedIPs: ["10.0.0.0/24"]
-                address: "10.0.0.2/24"
+              tailscaleConfig:
+                hostname: "e2e-test-node"
+                tags: ["tag:ci-runner"]
+                ephemeral: true
           EOF
 
-          # Test 3: Missing WireGuard secret
+          # Test 3: Missing Tailscale secret
           kubectl apply -f - << EOF
           apiVersion: tgp.io/v1
           kind: GPURequest
@@ -241,10 +210,13 @@ jobs:
             region: us-east-1
             talosConfig:
               image: "factory.talos.dev/installer/test:v1.8.2"
-              wireGuardConfig:
-                privateKeySecretRef:
+              tailscaleConfig:
+                hostname: "e2e-missing-secret"
+                tags: ["tag:ci-runner"]
+                ephemeral: true
+                authKeySecretRef:
                   name: nonexistent-secret
-                  key: private-key
+                  key: auth-key
                   namespace: tgp-system
           EOF
           echo "Waiting for controller to process error cases..."
@@ -254,7 +226,7 @@ jobs:
           kubectl describe gpurequest e2e-invalid-provider | grep -A 5 "Events:"
           echo "Invalid region test:"
           kubectl describe gpurequest e2e-invalid-region | grep -A 5 "Events:"
-          echo "Missing secret test:"
+          echo "Missing Tailscale secret test:"
           kubectl describe gpurequest e2e-missing-secret | grep -A 5 "Events:"
       - name: Verify E2E test results
         run: |
@@ -270,7 +242,7 @@ jobs:
           MISSING_SECRET_STATUS=$(kubectl get gpurequest e2e-missing-secret -o jsonpath='{.status.phase}')
           echo "Invalid provider status: $INVALID_PROVIDER_STATUS"
           echo "Invalid region status: $INVALID_REGION_STATUS"  
-          echo "Missing secret status: $MISSING_SECRET_STATUS"
+          echo "Missing Tailscale secret status: $MISSING_SECRET_STATUS"
           echo "=== All GPURequests ==="
           kubectl get gpurequests -o wide
       - name: Cleanup
