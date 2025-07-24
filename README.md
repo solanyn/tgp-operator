@@ -1,5 +1,7 @@
 # Talos GPU Provisioner
 
+> Still heavily WIP!
+
 Kubernetes operator for ephemeral GPU provisioning across multiple cloud providers with Tailscale mesh networking.
 
 Addresses intermittent GPU compute needs by provisioning instances on-demand from cloud providers and automatically integrating them into existing Talos Kubernetes clusters via Tailscale. Designed for workloads that require GPU resources occasionally rather than continuously.
