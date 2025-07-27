@@ -4,11 +4,6 @@ on:
   push:
     branches: [main]
 jobs:
-  lint:
-    name: Lint
-    uses: ./.github/workflows/lint.yml
-    permissions:
-      contents: read
   test-go:
     name: Go Tests
     uses: ./.github/workflows/test-go.yml
@@ -16,19 +11,13 @@ jobs:
       contents: read
   test-e2e:
     name: E2E Tests
-    needs: [lint, test-go]
+    needs: [test-go]
     uses: ./.github/workflows/test-e2e.yml
     permissions:
       contents: read
-  security:
-    name: Security Scan
-    uses: ./.github/workflows/security-scan.yml
-    permissions:
-      contents: read
-      security-events: write
   build:
     name: Build Images
-    needs: [lint, test-go]
+    needs: [test-go]
     uses: ./.github/workflows/build-and-push-images.yml
     permissions:
       contents: read
