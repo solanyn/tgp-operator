@@ -1,12 +1,20 @@
 ---
+# golangci-lint configuration for tgp-operator
+# See https://golangci-lint.run/usage/configuration/ for reference
+
 run:
   timeout: 5m
   issues-exit-code: 1
   tests: true
   modules-download-mode: readonly
+  go: '1.24'
+
 linters-settings:
   gci:
-    sections: [standard, default, prefix(github.com/solanyn/tgp-operator)]
+    sections:
+      - standard
+      - default
+      - prefix(github.com/solanyn/tgp-operator)
   goconst:
     min-len: 2
     min-occurrences: 2
@@ -17,15 +25,42 @@ linters-settings:
       - opinionated
       - performance
       - style
-    disabled-checks: [dupImport, ifElseChain, octalLiteral, whyNoLint]
+    disabled-checks:
+      - dupImport
+      - ifElseChain
+      - octalLiteral
+      - whyNoLint
   gocyclo:
     min-complexity: 15
   goimports:
     local-prefixes: github.com/solanyn/tgp-operator
   mnd:
-    checks: [argument, case, condition, return]
+    checks:
+      - argument
+      - case
+      - condition
+      - return
+    ignored-numbers:
+      - '0.51'
+      - '0.78'
+      - '1.10'
+      - '2.30'
+      - '3.09'
+      - '2'
+      - '8'
+      - '10'
+      - '15'
+      - '30'
+      - '204'
+      - '404'
   govet:
-    enable: [shadow]
+    enable:
+      - shadow
+    settings:
+      printf:
+        funcs:
+          - (github.com/go-logr/logr.Logger).Info
+          - (github.com/go-logr/logr.Logger).Error
   lll:
     line-length: 140
   misspell:
@@ -38,7 +73,6 @@ linters:
   disable-all: true
   enable:
     - bodyclose
-    - dogsled
     - dupl
     - errcheck
     - exhaustive
@@ -50,6 +84,7 @@ linters:
     - gocyclo
     - gofmt
     - goimports
+    - mnd
     - goprintffuncname
     - gosec
     - gosimple
@@ -71,9 +106,15 @@ linters:
 issues:
   exclude-rules:
     - path: zz_generated.deepcopy.go
-      linters: [lll]
+      linters:
+        - lll
     - path: _test\.go
-      linters: [mnd]
-    - linters: [lll]
+      linters:
+        - mnd
+        - staticcheck
+    - linters:
+        - lll
       source: ^//\+kubebuilder
   exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
