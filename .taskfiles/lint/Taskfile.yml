@@ -10,10 +10,17 @@ tasks:
       - task: github-actions
   go:
     desc: Lint and format Go code
-    cmds: [golangci-lint run ./..., gofumpt -l -d .]
+    cmds: 
+      - go install golang.org/x/tools/cmd/goimports@latest
+      - golangci-lint run --config .golangci.yml ./...
+      - gofumpt -l -d .
   go-fix:
     desc: Fix Go code formatting
-    cmds: [gofumpt -l -w ., go mod tidy]
+    cmds: 
+      - go install golang.org/x/tools/cmd/goimports@latest
+      - gofumpt -l -w .
+      - goimports -w .
+      - go mod tidy
   yaml:
     desc: Check YAML files for compliance
     cmds:
