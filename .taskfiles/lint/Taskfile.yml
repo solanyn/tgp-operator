@@ -38,6 +38,9 @@ tasks:
   github-actions:
     desc: Lint GitHub Actions workflows
     cmds: [actionlint]
+  actions:
+    desc: Lint GitHub Actions workflows (alias)
+    cmds: [task: github-actions]
   fix-all:
     desc: Auto-fix all formatting issues
     cmds:

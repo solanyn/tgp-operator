@@ -7,69 +7,33 @@ on:
     branches: [main]
   workflow_call:
 jobs:
-  golangci-lint:
-    name: Go Linting
+  go-lint:
+    name: Go Linting & Formatting
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: jdx/mise-action@v2
         with:
-          go-version-file: go.mod
           cache: true
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.64.8
-          args: --timeout 5m
-  go-format:
-    name: Go Formatting
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-      - name: Install formatters
-        run: |
-          go install mvdan.cc/gofumpt@latest
-          go install golang.org/x/tools/cmd/goimports@latest
-      - name: Check formatting
-        run: |
-          test -z "$(gofumpt -l .)" || (echo "Files need formatting. Run 'gofumpt -w .' to fix." && exit 1)
-          test -z "$(goimports -l .)" || (echo "Imports need formatting. Run 'goimports -w .' to fix." && exit 1)
+      - name: Run Go linting
+        run: task lint:go
   helm-lint:
     name: Helm Chart Linting
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: jdx/mise-action@v2
         with:
-          go-version-file: go.mod
           cache: true
-      - name: Install controller-gen
-        run: go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
-      - name: Generate CRD
-        run: |
-          $(go env GOPATH)/bin/controller-gen crd paths="./pkg/api/..." output:crd:artifacts:config=config/crd/bases
-          cp config/crd/bases/tgp.io_gpurequests.yaml chart/templates/crd.yaml
-      - name: Setup Helm
-        uses: azure/setup-helm@v4
-        with:
-          version: v3.14.0
-      - name: Lint Helm chart
-        run: |
-          helm lint chart
-      - name: Template Helm chart
-        run: |
-          helm template tgp-operator chart > /dev/null
+      - name: Run Helm validation
+        run: task chart:validate
   actionlint:
     name: GitHub Actions Linting
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: actionlint
-        uses: reviewdog/action-actionlint@v1
+      - uses: jdx/mise-action@v2
         with:
-          reporter: github-pr-check
-          fail_on_error: true
+          cache: true
+      - name: Run actionlint
+        run: task lint:actions

@@ -50,10 +50,6 @@ tasks:
     cmds:
       - task: unit
       - task: integration
-  test:all:
-    desc: Run all safe tests (alias)
-    cmds:
-      - {task: all}
   validate-providers:
     desc: Validate cloud provider credentials and connectivity (no instance launches)
     cmds:
@@ -66,10 +62,6 @@ tasks:
       - echo "  export PAPERSPACE_API_KEY=your_paperspace_key"
       - echo ""
       - go test ./test/real/... -v -timeout 5m -tags=real
-  test:validate-providers:
-    desc: Validate cloud provider credentials (alias)
-    cmds:
-      - {task: validate-providers}
   e2e:
     desc: Run end-to-end tests with real cloud provider APIs (requires API keys)
     cmds:
@@ -109,98 +101,24 @@ tasks:
       - echo ""
       - echo "E2E test completed successfully"
       - echo "For full GPU provisioning tests, use Talos-based testing"
-  test:e2e:
-    desc: Run end-to-end tests (alias)
-    cmds:
-      - {task: e2e}
-  setup-wireguard-server:
-    desc: Deploy WireGuard server for E2E testing (requires cloud credentials)
-    cmds:
-      - echo "Setting up WireGuard server for E2E testing..."
-      - echo ""
-      - echo 'Prerequisites:'
-      - echo "  - Cloud provider credentials (for VPS deployment)"
-      - echo "  - SSH key configured"
-      - echo ""
-      - task: _generate-wg-keys
-      - task: _deploy-wg-server
-      - task: _configure-wg-server
-      - echo "WireGuard server deployed and configured"
-      - echo "Server endpoint and keys saved to ./test-infrastructure/"
-  _generate-wg-keys:
-    desc: Generate WireGuard keypairs for testing
-    cmds:
-      - mkdir -p ./test-infrastructure/wireguard
-      - |
-        if [ ! -f ./test-infrastructure/wireguard/server-private.key ]; then
-          echo "Generating WireGuard server keypairs..."
-          wg genkey > ./test-infrastructure/wireguard/server-private.key
-          wg pubkey < ./test-infrastructure/wireguard/server-private.key > ./test-infrastructure/wireguard/server-public.key
-        fi
-      - |
-        if [ ! -f ./test-infrastructure/wireguard/client-private.key ]; then
-          echo "Generating WireGuard client keypairs..."
-          wg genkey > ./test-infrastructure/wireguard/client-private.key
-          wg pubkey < ./test-infrastructure/wireguard/client-private.key > ./test-infrastructure/wireguard/client-public.key
-        fi
-      - echo "WireGuard keypairs generated"
-    status:
-      - test -f ./test-infrastructure/wireguard/server-private.key
-      - test -f ./test-infrastructure/wireguard/client-private.key
-  _deploy-wg-server:
-    desc: Deploy VPS for WireGuard server
-    cmds:
-      - echo "Deploying VPS for WireGuard server..."
-      - echo "Using cheapest cloud provider for testing infrastructure"
-      - |
-        # Example: Use Hetzner Cloud API for cheap VPS ($3/month)
-        if [ -n "$HETZNER_API_TOKEN" ]; then
-          echo "Deploying to Hetzner Cloud..."
-          # Create server, get IP, save to config
-          echo "TODO: Implement Hetzner Cloud deployment"
-        elif [ -n "$DIGITALOCEAN_TOKEN" ]; then
-          echo "Deploying to DigitalOcean..."
-          echo "TODO: Implement DigitalOcean deployment"
-        else
-          echo "No cloud credentials found. Set HETZNER_API_TOKEN or DIGITALOCEAN_TOKEN"
-          echo "Manual deployment required - see documentation"
-        fi
-  _configure-wg-server:
-    desc: Configure WireGuard server via SSH
-    cmds:
-      - echo "Configuring WireGuard server..."
-      - |
-        if [ -f ./test-infrastructure/wireguard/server-ip ]; then
-          SERVER_IP=$(cat ./test-infrastructure/wireguard/server-ip)
-          echo "Configuring WireGuard on server: $SERVER_IP"
-          # SSH to server and configure WireGuard
-          echo "TODO: Implement server configuration via SSH"
-        else
-          echo "Server IP not found. Deploy server first."
-          exit 1
-        fi
   e2e-automated:
     desc: Fully automated E2E testing with infrastructure provisioning
     cmds:
       - echo "Running fully automated E2E testing..."
       - echo ""
       - echo 'This will:'
-      - echo "  1. Deploy WireGuard server (if not exists)"
-      - echo "  2. Set up Talos Docker cluster"
-      - echo "  3. Deploy TGP operator with real credentials"
-      - echo "  4. Run E2E test workflow"
-      - echo "  5. Clean up infrastructure"
+      - echo "  1. Set up Talos Docker cluster"
+      - echo "  2. Deploy TGP operator with real credentials"
+      - echo "  3. Run E2E test workflow"
+      - echo "  4. Clean up infrastructure"
       - echo ""
-      - "echo 'WARNING: This will provision cloud resources and incur costs'"
-      - echo ""
-      - task: setup-wireguard-server
       - task: setup-talos
       - task: _run-automated-e2e
       - task: cleanup-e2e-infrastructure
       - echo "Automated E2E testing completed"
   _run-automated-e2e:
     desc: Run E2E tests with provisioned infrastructure
-    deps: [setup-wireguard-server, setup-talos]
+    deps: [setup-talos]
     cmds:
       - echo "Running E2E tests with real infrastructure..."
       - kubectl apply -f config/crd/bases/
@@ -221,16 +139,11 @@ tasks:
           --from-literal=paperspace-api-key="${PAPERSPACE_API_KEY:-fake-key}" \
           --dry-run=client -o yaml | kubectl apply -f -
       - |
-        # Create WireGuard secrets from generated keys
-        if [ -f ./test-infrastructure/wireguard/client-private.key ]; then
-          kubectl create secret generic wireguard-test-config \
-            --from-file=private-key=./test-infrastructure/wireguard/client-private.key \
-            --from-file=public-key=./test-infrastructure/wireguard/client-public.key \
-            --from-literal=server-endpoint="$(cat ./test-infrastructure/wireguard/server-ip):51820" \
-            --from-literal=allowed-ips="10.0.0.0/24" \
-            --from-literal=address="10.0.0.2/24" \
-            --dry-run=client -o yaml | kubectl apply -f -
-        fi
+        # Create Tailscale OAuth credentials secret (for dynamic auth key generation)
+        kubectl create secret generic tailscale-oauth \
+          --from-literal=client-id="${TAILSCALE_OAUTH_CLIENT_ID:-fake-client-id}" \
+          --from-literal=client-secret="${TAILSCALE_OAUTH_SECRET:-fake-client-secret}" \
+          --dry-run=client -o yaml | kubectl apply -f -
   _deploy-operator-e2e:
     desc: Deploy operator for E2E testing
     cmds:
@@ -244,7 +157,7 @@ tasks:
       - echo "  2. Creating GPURequest with real provider"
       - echo "  3. Validating controller reconciliation"
       - echo "  4. Testing secret resolution"
-      - echo "  5. Verifying WireGuard configuration"
+      - echo "  5. Verifying Tailscale configuration"
       - echo "  6. Stopping before expensive GPU launch"
       - "echo 'TODO: Implement actual test cases'"
   cleanup-e2e-infrastructure:
@@ -252,21 +165,7 @@ tasks:
     cmds:
       - echo "Cleaning up E2E infrastructure..."
       - task: cleanup-talos
-      - task: _cleanup-wireguard-server
       - echo "E2E infrastructure cleaned up"
-  _cleanup-wireguard-server:
-    desc: Destroy WireGuard server VPS
-    cmds:
-      - |
-        if [ -f ./test-infrastructure/wireguard/server-id ]; then
-          SERVER_ID=$(cat ./test-infrastructure/wireguard/server-id)
-          echo "Destroying WireGuard server: $SERVER_ID"
-          # API call to destroy server
-          echo "TODO: Implement server destruction"
-          rm -f ./test-infrastructure/wireguard/server-*
-        else
-          echo "No server to clean up"
-        fi
   provision-talos-cloud:
     desc: Provision a real cloud-based Talos cluster
     cmds:

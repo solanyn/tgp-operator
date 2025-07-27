@@ -28,20 +28,11 @@ jobs:
           sudo rm -rf /opt/hostedtoolcache/CodeQL
           sudo docker system prune -af
           df -h
-      - uses: actions/setup-go@v5
+      - uses: jdx/mise-action@v2
         with:
-          go-version-file: go.mod
           cache: true
-      - name: Install task runner
-        run: |
-          sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
-      - name: Install semantic version tool
-        run: |
-          curl -L https://github.com/caarlos0/svu/releases/download/v1.12.0/svu_1.12.0_linux_amd64.tar.gz | tar xz
-          sudo mv svu /usr/local/bin/
       - name: Setup development environment
-        run: |
-          task setup
+        run: task setup
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"

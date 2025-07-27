@@ -22,6 +22,11 @@ tasks:
     cmds:
       - docker build -t tgp-operator:security-scan .
       - trivy image --severity HIGH,CRITICAL tgp-operator:security-scan
+  trivy:
+    desc: Run all Trivy scans (code and container)
+    cmds:
+      - task: trivy-code
+      - task: trivy-container
   dependencies:
     desc: Check for vulnerable dependencies
     cmds: [go list -json -deps ./... | nancy sleuth]

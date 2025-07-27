@@ -12,17 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: jdx/mise-action@v2
         with:
-          go-version-file: go.mod
           cache: true
-      - name: Install dependencies
-        run: |
-          go mod download
-          go install github.com/onsi/ginkgo/v2/ginkgo@latest
       - name: Run unit tests
-        run: |
-          go test -v -race -coverprofile=coverage.out -covermode=atomic ./pkg/...
+        run: task test:unit
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
@@ -34,21 +28,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: jdx/mise-action@v2
         with:
-          go-version-file: go.mod
           cache: true
-      - name: Setup envtest
-        run: |
-          # Install setup-envtest
-          go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
-
-          # Download and setup envtest binaries
-          KUBEBUILDER_ASSETS=$(setup-envtest use 1.30.x -p path)
-          echo "KUBEBUILDER_ASSETS=$KUBEBUILDER_ASSETS" >> $GITHUB_ENV
       - name: Run integration tests
-        run: |
-          go test -v -timeout 10m ./test/integration/...
+        run: task test:integration
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4

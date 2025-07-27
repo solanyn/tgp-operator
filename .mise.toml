@@ -11,6 +11,12 @@ svu = "latest"
 "pipx:yamlfix" = "latest"
 setup-envtest = "latest"
 git-chglog = "latest"
+actionlint = "latest"
+golangci-lint = "latest"
+gofumpt = "latest"
+goimports = "latest"
+gosec = "latest"
+trivy = "latest"
 
 [env]
 GOBIN = "{{config_root}}/bin"
