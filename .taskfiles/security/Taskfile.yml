@@ -12,9 +12,9 @@ tasks:
   gosec:
     desc: Run Go security scanner
     cmds:
-      - go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
-      - gosec -fmt sarif -out gosec-results.sarif ./... || true
-      - gosec ./...
+      - go install github.com/securego/gosec/v2/cmd/gosec@latest
+      - bin/gosec -fmt sarif -out gosec-results.sarif ./... || true
+      - bin/gosec ./...
   trivy-code:
     desc: Scan code for vulnerabilities
     cmds: ['trivy fs --severity HIGH,CRITICAL .']

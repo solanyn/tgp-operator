@@ -15,6 +15,7 @@ actionlint = "latest"
 golangci-lint = "latest"
 gofumpt = "latest"
 trivy = "latest"
+kubeconform = "latest"
 
 [env]
 GOBIN = "{{config_root}}/bin"
