@@ -77,9 +77,15 @@ type TailscaleConfig struct {
 	AdvertiseRoutes []string `json:"advertiseRoutes,omitempty"`
 
 	// AuthKeySecretRef references a secret containing the Tailscale auth key
-	// Required if not using OAuth client credentials
+	// Deprecated: Use OAuthCredentialsSecretRef for better security and automatic key management
 	// +optional
 	AuthKeySecretRef *SecretKeyRef `json:"authKeySecretRef,omitempty"`
+
+	// OAuthCredentialsSecretRef references a secret containing Tailscale OAuth credentials
+	// The operator will use these to dynamically generate auth keys as needed
+	// Secret should contain 'client-id' and 'client-secret' keys
+	// +optional
+	OAuthCredentialsSecretRef *TailscaleOAuthSecretRef `json:"oauthCredentialsSecretRef,omitempty"`
 
 	// OperatorConfig contains Tailscale Operator integration settings
 	// +optional
@@ -129,6 +135,23 @@ type SecretKeyRef struct {
 
 	// Namespace is the namespace of the secret (optional, defaults to GPURequest namespace)
 	Namespace string `json:"namespace,omitempty"`
+}
+
+// TailscaleOAuthSecretRef references a secret containing Tailscale OAuth credentials
+type TailscaleOAuthSecretRef struct {
+	// Name is the name of the secret containing OAuth credentials
+	Name string `json:"name"`
+
+	// Namespace is the namespace of the secret (optional, defaults to GPURequest namespace)
+	Namespace string `json:"namespace,omitempty"`
+
+	// ClientIDKey is the key containing the OAuth client ID (defaults to "client-id")
+	// +optional
+	ClientIDKey string `json:"clientIdKey,omitempty"`
+
+	// ClientSecretKey is the key containing the OAuth client secret (defaults to "client-secret")
+	// +optional
+	ClientSecretKey string `json:"clientSecretKey,omitempty"`
 }
 
 // GPURequestStatus defines the observed state of GPURequest
@@ -323,6 +346,24 @@ func (tc *TailscaleConfig) GetConnectorEnabled() bool {
 		return *tc.OperatorConfig.ConnectorEnabled
 	}
 	return true
+}
+
+// TailscaleOAuthSecretRef helper methods
+
+// GetClientIDKey returns the client ID key or default
+func (ref *TailscaleOAuthSecretRef) GetClientIDKey() string {
+	if ref.ClientIDKey != "" {
+		return ref.ClientIDKey
+	}
+	return "client-id"
+}
+
+// GetClientSecretKey returns the client secret key or default
+func (ref *TailscaleOAuthSecretRef) GetClientSecretKey() string {
+	if ref.ClientSecretKey != "" {
+		return ref.ClientSecretKey
+	}
+	return "client-secret"
 }
 
 // TalosConfig helper methods

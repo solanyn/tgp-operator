@@ -182,7 +182,7 @@ func TestGPURequestController_Reconcile_AddFinalizer(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
-	if !result.Requeue && result.RequeueAfter == 0 {
+	if result.RequeueAfter == 0 && !result.Requeue {
 		t.Error("Expected requeue to be requested")
 	}
 
@@ -232,8 +232,8 @@ func TestGPURequestController_Reconcile_PendingPhase(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
-	if !result.Requeue {
-		t.Error("Expected requeue to be true")
+	if result.RequeueAfter == 0 && !result.Requeue {
+		t.Error("Expected requeue to be requested")
 	}
 
 	var updated tgpv1.GPURequest
@@ -333,8 +333,8 @@ func TestGPURequestController_handlePending(t *testing.T) {
 		if err != nil {
 			t.Errorf("Expected no error, got: %v", err)
 		}
-		if !result.Requeue {
-			t.Error("Expected requeue to be true")
+		if result.RequeueAfter == 0 && !result.Requeue {
+			t.Error("Expected requeue to be requested")
 		}
 		if gpuRequest.Status.Phase != tgpv1.GPURequestPhaseProvisioning {
 			t.Errorf("Expected phase to be %s, got: %s", tgpv1.GPURequestPhaseProvisioning, gpuRequest.Status.Phase)

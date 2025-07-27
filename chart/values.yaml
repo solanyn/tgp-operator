@@ -32,7 +32,6 @@ providers:
   paperspace:
     secretName: tgp-secret
     secretKey: PAPERSPACE_API_KEY
-namespace: tgp-system
 metrics:
   enabled: true
   port: 8080

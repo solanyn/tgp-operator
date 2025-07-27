@@ -34,7 +34,8 @@ jobs:
       - name: Install talosctl
         run: |
           curl -sL https://talos.dev/install | sh
-          sudo mv talosctl /usr/local/bin/
+          # The install script puts talosctl in ~/.local/bin, add to PATH
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
       - name: Connect to Tailscale
         uses: tailscale/github-action@v2
         with:
@@ -68,9 +69,10 @@ jobs:
             --from-literal=paperspace-api-key="${{ secrets.PAPERSPACE_API_KEY }}" \
             -n tgp-system
 
-          # Create Tailscale test auth key secret (for GPU nodes to connect)
-          kubectl create secret generic tailscale-auth \
-            --from-literal=auth-key="${{ secrets.TAILSCALE_E2E_AUTH_KEY }}" \
+          # Create Tailscale OAuth credentials secret (for dynamic auth key generation)
+          kubectl create secret generic tailscale-oauth \
+            --from-literal=client-id="${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}" \
+            --from-literal=client-secret="${{ secrets.TAILSCALE_OAUTH_SECRET }}" \
             -n tgp-system
       - name: Test provider connectivity
         run: |
@@ -145,9 +147,8 @@ jobs:
                 tags: ["tag:ci-runner", "tag:gpu-node"]
                 ephemeral: true
                 acceptRoutes: true
-                authKeySecretRef:
-                  name: tailscale-auth
-                  key: auth-key
+                oauthCredentialsSecretRef:
+                  name: tailscale-oauth
                   namespace: tgp-system
           EOF
           echo "Waiting for controller to process request..."

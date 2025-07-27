@@ -46,24 +46,67 @@ func (tc *TailscaleConfig) Resolve(ctx context.Context, client client.Client, na
 	}
 
 	resolved := &TailscaleConfig{
-		Hostname:        tc.Hostname,
-		Tags:            tc.Tags,
-		Ephemeral:       tc.Ephemeral,
-		AcceptRoutes:    tc.AcceptRoutes,
-		AdvertiseRoutes: tc.AdvertiseRoutes,
-		OperatorConfig:  tc.OperatorConfig,
+		Hostname:                  tc.Hostname,
+		Tags:                      tc.Tags,
+		Ephemeral:                 tc.Ephemeral,
+		AcceptRoutes:              tc.AcceptRoutes,
+		AdvertiseRoutes:           tc.AdvertiseRoutes,
+		AuthKeySecretRef:          tc.AuthKeySecretRef,
+		OAuthCredentialsSecretRef: tc.OAuthCredentialsSecretRef,
+		OperatorConfig:            tc.OperatorConfig,
 	}
 
-	// Resolve auth key secret reference
+	// Resolve auth key secret reference (legacy)
 	if tc.AuthKeySecretRef != nil {
-		value, err := resolveSecretRef(ctx, client, tc.AuthKeySecretRef, namespace)
+		_, err := resolveSecretRef(ctx, client, tc.AuthKeySecretRef, namespace)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve authKey secret: %w", err)
 		}
-		// Create a temporary secret ref for the resolved value
-		// Note: In practice, we'd use this value directly in cloud-init
-		_ = value // Will be used in cloud-init generation
+	}
+
+	// Resolve OAuth credentials secret reference (preferred)
+	if tc.OAuthCredentialsSecretRef != nil {
+		err := tc.resolveOAuthCredentials(ctx, client, namespace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve OAuth credentials secret: %w", err)
+		}
 	}
 
 	return resolved, nil
+}
+
+// resolveOAuthCredentials validates OAuth credentials in the referenced secret
+func (tc *TailscaleConfig) resolveOAuthCredentials(ctx context.Context, client client.Client, defaultNamespace string) error {
+	if tc.OAuthCredentialsSecretRef == nil {
+		return nil
+	}
+
+	ref := tc.OAuthCredentialsSecretRef
+	namespace := ref.Namespace
+	if namespace == "" {
+		namespace = defaultNamespace
+	}
+
+	secret := &corev1.Secret{}
+	err := client.Get(ctx, types.NamespacedName{
+		Name:      ref.Name,
+		Namespace: namespace,
+	}, secret)
+	if err != nil {
+		return fmt.Errorf("failed to get OAuth credentials secret %s/%s: %w", namespace, ref.Name, err)
+	}
+
+	// Validate that both client ID and client secret are present
+	clientIDKey := ref.GetClientIDKey()
+	clientSecretKey := ref.GetClientSecretKey()
+
+	if _, exists := secret.Data[clientIDKey]; !exists {
+		return fmt.Errorf("OAuth client ID key %s not found in secret %s/%s", clientIDKey, namespace, ref.Name)
+	}
+
+	if _, exists := secret.Data[clientSecretKey]; !exists {
+		return fmt.Errorf("OAuth client secret key %s not found in secret %s/%s", clientSecretKey, namespace, ref.Name)
+	}
+
+	return nil
 }
