@@ -34,7 +34,7 @@ jobs:
         run: |
           curl -sL https://talos.dev/install | sh
           # The install script puts talosctl in ~/.local/bin, add to PATH
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Connect to Tailscale
         uses: tailscale/github-action@v2
         with:
@@ -48,7 +48,7 @@ jobs:
           tailscale status
           echo "Testing connectivity to tailnet..."
           # Test if we can reach other tailscale nodes (if any)
-          tailscale ping --timeout=5s $(tailscale status --json | jq -r '.Self.TailscaleIPs[0]') || true
+          tailscale ping --timeout=5s "$(tailscale status --json | jq -r '.Self.TailscaleIPs[0]')" || true
       - name: Create Talos cluster
         run: |
           talosctl cluster create --provisioner docker --name e2e-test --wait --workers 1

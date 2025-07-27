@@ -58,8 +58,8 @@ jobs:
         id: version
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
-          echo "chart_version=${VERSION#v}" >> $GITHUB_OUTPUT
-          echo "app_version=${VERSION#v}" >> $GITHUB_OUTPUT
+          echo "chart_version=${VERSION#v}" >> "$GITHUB_OUTPUT"
+          echo "app_version=${VERSION#v}" >> "$GITHUB_OUTPUT"
       - name: Update chart version
         run: |
           sed -i "s/version: .*/version: ${{ steps.version.outputs.chart_version }}/" chart/Chart.yaml
