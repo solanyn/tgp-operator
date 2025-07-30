@@ -1,0 +1,18 @@
+---
+apiVersion: tgp.io/v1
+kind: GPURequest
+metadata:
+  name: test-gpu-node-v3
+  namespace: default
+spec:
+  provider: "runpod"
+  gpuType: "RTX3090"
+  region: "US"
+  maxHourlyPrice: "0.50"
+  maxLifetime: "1h"
+  idleTimeout: "10m"
+  spot: true
+  talosConfig:
+    image: "ghcr.io/siderolabs/talos:v1.10.5"
+    # No tailscaleConfig - should use operator defaults
+

@@ -1,0 +1,10 @@
+apiVersion: tgp.io/v1
+kind: GPURequest
+metadata:
+  name: test-simple-gpu
+spec:
+  provider: runpod
+  gpuType: RTX3090
+  region: US
+  maxHourlyPrice: "0.50"
+  spot: true

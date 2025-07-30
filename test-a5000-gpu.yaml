@@ -1,0 +1,10 @@
+apiVersion: tgp.io/v1
+kind: GPURequest
+metadata:
+  name: test-a5000-gpu
+spec:
+  provider: runpod
+  gpuType: RTX A5000
+  region: US
+  maxHourlyPrice: "0.20"
+  spot: true
