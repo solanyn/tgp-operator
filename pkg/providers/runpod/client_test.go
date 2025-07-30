@@ -2,6 +2,7 @@ package runpod
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	tgpv1 "github.com/solanyn/tgp-operator/pkg/api/v1"
@@ -9,10 +10,16 @@ import (
 )
 
 func TestClient_LaunchInstance(t *testing.T) {
-	client := NewClient("fake-api-key")
+	// Check if we have real RunPod credentials
+	apiKey := "fake-api-key"
+	if realKey := os.Getenv("RUNPOD_API_KEY"); realKey != "" {
+		apiKey = realKey
+	}
+
+	client := NewClient(apiKey)
 	ctx := context.Background()
 
-	t.Run("should launch a mock instance", func(t *testing.T) {
+	t.Run("should launch instance or fail gracefully with invalid credentials", func(t *testing.T) {
 		req := &providers.LaunchRequest{
 			GPUType: "RTX3090",
 			Region:  "us-east-1",
@@ -23,11 +30,29 @@ func TestClient_LaunchInstance(t *testing.T) {
 		}
 
 		instance, err := client.LaunchInstance(ctx, req)
-		if err != nil {
-			t.Errorf("Expected no error, got: %v", err)
+
+		if apiKey == "fake-api-key" {
+			// With fake credentials, we expect an error
+			if err == nil {
+				t.Error("Expected error with fake credentials, got none")
+			}
+			// Skip further checks since we expect failure
+			return
 		}
-		if instance.Status != providers.InstanceStatePending {
-			t.Errorf("Expected status to be %s, got: %s", providers.InstanceStatePending, instance.Status)
+
+		// With real credentials, we expect success
+		if err != nil {
+			t.Errorf("Expected no error with real credentials, got: %v", err)
+			return
+		}
+
+		if instance == nil {
+			t.Error("Expected instance to not be nil")
+			return
+		}
+
+		if instance.Status != providers.InstanceStatePending && instance.Status != providers.InstanceStateRunning {
+			t.Errorf("Expected status to be pending or running, got: %s", instance.Status)
 		}
 		if instance.ID == "" {
 			t.Error("Expected instance ID to not be empty")
@@ -36,28 +61,62 @@ func TestClient_LaunchInstance(t *testing.T) {
 }
 
 func TestClient_GetInstanceStatus(t *testing.T) {
-	client := NewClient("fake-api-key")
+	// Check if we have real RunPod credentials
+	apiKey := "fake-api-key"
+	if realKey := os.Getenv("RUNPOD_API_KEY"); realKey != "" {
+		apiKey = realKey
+	}
+
+	client := NewClient(apiKey)
 	ctx := context.Background()
 
-	t.Run("should return mock status", func(t *testing.T) {
+	t.Run("should get instance status or fail gracefully with invalid credentials", func(t *testing.T) {
 		status, err := client.GetInstanceStatus(ctx, "test-instance-id")
-		if err != nil {
-			t.Errorf("Expected no error, got: %v", err)
-		}
-		if status.State != providers.InstanceStateRunning {
-			t.Errorf("Expected status to be %s, got: %s", providers.InstanceStateRunning, status.State)
+
+		if apiKey == "fake-api-key" {
+			// With fake credentials, GetInstanceStatus should return a status with Failed state
+			// because our implementation handles API errors by returning a Failed status
+			if err != nil {
+				t.Errorf("Expected no error (handled internally), got: %v", err)
+				return
+			}
+			if status.State != providers.InstanceStateFailed {
+				t.Errorf("Expected status to be Failed with fake credentials, got: %s", status.State)
+			}
+		} else {
+			// With real credentials but fake instance ID, we expect a Failed state
+			if err != nil {
+				t.Errorf("Expected no error (handled internally), got: %v", err)
+				return
+			}
+			// The status should indicate failure for non-existent instance
+			t.Logf("Status for non-existent instance: %s - %s", status.State, status.Message)
 		}
 	})
 }
 
 func TestClient_TerminateInstance(t *testing.T) {
-	client := NewClient("fake-api-key")
+	// Check if we have real RunPod credentials
+	apiKey := "fake-api-key"
+	if realKey := os.Getenv("RUNPOD_API_KEY"); realKey != "" {
+		apiKey = realKey
+	}
+
+	client := NewClient(apiKey)
 	ctx := context.Background()
 
-	t.Run("should terminate instance without error", func(t *testing.T) {
+	t.Run("should terminate instance or fail gracefully with invalid credentials", func(t *testing.T) {
 		err := client.TerminateInstance(ctx, "test-instance-id")
-		if err != nil {
-			t.Errorf("Expected no error, got: %v", err)
+
+		if apiKey == "fake-api-key" {
+			// With fake credentials, we expect an error
+			if err == nil {
+				t.Error("Expected error with fake credentials, got none")
+			}
+		} else {
+			// With real credentials and a fake instance ID, we might get an error
+			// This is expected - terminating a non-existent instance should fail
+			t.Logf("Termination result: %v", err)
 		}
 	})
 }

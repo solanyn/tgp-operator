@@ -171,24 +171,190 @@ func (c *Client) translateGPUTypeToStandard(runpodType string) string {
 }
 
 func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchRequest) (*providers.GPUInstance, error) {
+	// Optional: Check user credits before attempting to launch (if such query exists)
+	// For now, we'll rely on the error handling in the RentSpotInstance call
+
+	// Map GPU type to RunPod GPU type ID
+	gpuTypeID, err := c.mapGPUTypeToID(req.GPUType)
+	if err != nil {
+		return nil, fmt.Errorf("unsupported GPU type %s: %w", req.GPUType, err)
+	}
+
+	// Generate a unique name for the pod
+	podName := fmt.Sprintf("tgp-%s-%d", strings.ToLower(req.GPUType), time.Now().Unix())
+
+	// Use TalosConfig image if available, otherwise default
+	imageName := "runpod/base:3.10-cuda11.8.0-devel-ubuntu22.04"
+	if req.TalosConfig != nil && req.TalosConfig.Image != "" {
+		imageName = req.TalosConfig.Image
+	}
+
+	input := PodRentInterruptableInput{
+		CloudType:           "ALL", // Allow any cloud type
+		GpuCount:            1,     // Default to 1 GPU
+		VolumeInGb:          20,    // Default storage
+		ContainerDiskInGb:   10,    // Default container disk
+		MinVcpuCount:        4,     // Minimum CPU cores
+		MinMemoryInGb:       16,    // Minimum RAM
+		GpuTypeId:           gpuTypeID,
+		Name:                podName,
+		ImageName:           imageName,
+		Ports:               "22/tcp", // SSH port
+		VolumeMountPath:     "/workspace",
+		Env:                 []EnvVar{}, // No custom environment variables for now
+		AllowedCudaVersions: []string{"11.8", "12.0", "12.1"},
+	}
+
+	response, err := RentSpotInstance(ctx, c.graphqlClient, input)
+	if err != nil {
+		// Check for billing-related errors and provide specific error messages
+		errMsg := err.Error()
+		if strings.Contains(strings.ToLower(errMsg), "credit") ||
+			strings.Contains(strings.ToLower(errMsg), "billing") ||
+			strings.Contains(strings.ToLower(errMsg), "insufficient") ||
+			strings.Contains(strings.ToLower(errMsg), "balance") {
+			return nil, fmt.Errorf("RunPod billing error (insufficient credits or billing issue): %w", err)
+		}
+		return nil, fmt.Errorf("failed to launch RunPod spot instance: %w", err)
+	}
+
+	pod := response.PodRentInterruptable
+
+	// Validate that the pod was actually created
+	if pod.Id == "" {
+		return nil, fmt.Errorf("RunPod returned empty pod ID - instance may not have been created due to billing or availability issues")
+	}
+
+	// Check if the pod status indicates immediate failure
+	if pod.Status == "FAILED" {
+		return nil, fmt.Errorf("RunPod instance failed immediately after creation - likely due to billing or resource availability issues")
+	}
+
 	return &providers.GPUInstance{
-		ID:        fmt.Sprintf("runpod-%d", time.Now().Unix()),
-		Status:    providers.InstanceStatePending,
-		PublicIP:  "",
+		ID:        pod.Id,
+		Status:    c.mapRunPodStatusToProviderStatus(pod.Status),
+		PublicIP:  "", // Will be populated when pod is running
 		CreatedAt: time.Now(),
 	}, nil
 }
 
+// mapGPUTypeToID maps our generic GPU types to RunPod GPU type IDs
+func (c *Client) mapGPUTypeToID(gpuType string) (string, error) {
+	// These are example mappings - actual RunPod GPU type IDs need to be obtained from their API
+	gpuTypeMap := map[string]string{
+		providers.GPUTypeRTX4090: "NVIDIA GeForce RTX 4090",
+		providers.GPUTypeH100:    "NVIDIA H100 80GB HBM3",
+		providers.GPUTypeA100:    "NVIDIA A100 80GB PCIe",
+		"RTX3090":                "NVIDIA GeForce RTX 3090",
+		"A5000":                  "NVIDIA RTX A5000",
+	}
+
+	if typeID, exists := gpuTypeMap[gpuType]; exists {
+		return typeID, nil
+	}
+
+	return "", fmt.Errorf("unsupported GPU type: %s", gpuType)
+}
+
+// mapRunPodStatusToProviderStatus maps RunPod pod status to our provider status
+func (c *Client) mapRunPodStatusToProviderStatus(status string) providers.InstanceState {
+	switch status {
+	case "PENDING":
+		return providers.InstanceStatePending
+	case "RUNNING":
+		return providers.InstanceStateRunning
+	case "STOPPED":
+		return providers.InstanceStateTerminated
+	case "EXITED":
+		return providers.InstanceStateTerminated
+	case "FAILED":
+		return providers.InstanceStateFailed
+	default:
+		return providers.InstanceStateUnknown
+	}
+}
+
 func (c *Client) GetInstanceStatus(ctx context.Context, instanceID string) (*providers.InstanceStatus, error) {
+	response, err := GetPod(ctx, c.graphqlClient, instanceID)
+	if err != nil {
+		// Check for billing-related errors in status queries
+		errMsg := err.Error()
+		var message string
+		if strings.Contains(strings.ToLower(errMsg), "credit") ||
+			strings.Contains(strings.ToLower(errMsg), "billing") ||
+			strings.Contains(strings.ToLower(errMsg), "insufficient") ||
+			strings.Contains(strings.ToLower(errMsg), "balance") {
+			message = fmt.Sprintf("RunPod billing error: %v", err)
+		} else if strings.Contains(strings.ToLower(errMsg), "not found") {
+			message = fmt.Sprintf("Pod not found (may have been terminated due to billing issues): %v", err)
+		} else {
+			message = fmt.Sprintf("Failed to get pod status: %v", err)
+		}
+
+		return &providers.InstanceStatus{
+			State:     providers.InstanceStateFailed,
+			Message:   message,
+			UpdatedAt: time.Now(),
+		}, nil
+	}
+
+	podStatus := response.Pod.Status
+	state := c.mapRunPodStatusToProviderStatus(podStatus)
+
+	// Add additional context for failed states
+	message := fmt.Sprintf("Pod status: %s", podStatus)
+	if state == providers.InstanceStateFailed {
+		message = fmt.Sprintf("Pod failed (status: %s) - check RunPod console for billing or resource issues", podStatus)
+	}
+
 	return &providers.InstanceStatus{
-		State:     providers.InstanceStateRunning,
-		Message:   "Instance is running normally",
+		State:     state,
+		Message:   message,
 		UpdatedAt: time.Now(),
 	}, nil
 }
 
 func (c *Client) TerminateInstance(ctx context.Context, instanceID string) error {
+	input := PodTerminateInput{
+		PodId: instanceID,
+	}
+
+	response, err := TerminatePod(ctx, c.graphqlClient, input)
+	if err != nil {
+		return fmt.Errorf("failed to terminate RunPod instance %s: %w", instanceID, err)
+	}
+
+	// Check if the termination was successful by verifying the response
+	if response.PodTerminate.Id != instanceID {
+		return fmt.Errorf("termination response mismatch: expected pod ID %s, got %s", instanceID, response.PodTerminate.Id)
+	}
+
 	return nil
+}
+
+// IsBillingError checks if an error is related to billing/credits
+func (c *Client) IsBillingError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "credit") ||
+		strings.Contains(errMsg, "billing") ||
+		strings.Contains(errMsg, "insufficient") ||
+		strings.Contains(errMsg, "balance")
+}
+
+// IsRetryableError checks if an error should be retried
+func (c *Client) IsRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := strings.ToLower(err.Error())
+	// Retry on temporary network issues, rate limiting, etc.
+	return strings.Contains(errMsg, "timeout") ||
+		strings.Contains(errMsg, "rate limit") ||
+		strings.Contains(errMsg, "temporarily unavailable") ||
+		strings.Contains(errMsg, "service unavailable")
 }
 
 func (c *Client) GetNormalizedPricing(ctx context.Context, gpuType, region string) (*providers.NormalizedPricing, error) {

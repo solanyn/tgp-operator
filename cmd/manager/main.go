@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -13,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	tgpv1 "github.com/solanyn/tgp-operator/pkg/api/v1"
+	"github.com/solanyn/tgp-operator/pkg/config"
 	"github.com/solanyn/tgp-operator/pkg/controllers"
 	"github.com/solanyn/tgp-operator/pkg/metrics"
 	"github.com/solanyn/tgp-operator/pkg/pricing"
@@ -27,11 +29,45 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
-// init registers required schemes for the controller manager.
-// This is required for Kubernetes controller-runtime functionality.
 func init() { //nolint:gochecknoinits // Required for Kubernetes scheme registration
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(tgpv1.AddToScheme(scheme))
+}
+
+// loadOperatorConfig loads configuration from file or returns defaults
+func loadOperatorConfig() *config.OperatorConfig {
+	configPath := "/etc/tgp-operator/config.yaml"
+
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		setupLog.Info("Config file not found, using defaults", "path", configPath)
+		return config.DefaultConfig()
+	}
+
+	// Read config file
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		setupLog.Error(err, "Failed to read config file, using defaults", "path", configPath)
+		return config.DefaultConfig()
+	}
+
+	var cfg config.OperatorConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		setupLog.Error(err, "Failed to parse config file, using defaults", "path", configPath)
+		return config.DefaultConfig()
+	}
+
+	setupLog.Info("Loaded operator configuration from file", "path", configPath)
+	return &cfg
+}
+
+// getAPIKey retrieves API key from environment variables for legacy support
+func getAPIKey(envVar string) string {
+	key := os.Getenv(envVar)
+	if key == "" {
+		setupLog.Info("API key not found in environment", "variable", envVar, "note", "Provider will use centralized config at runtime")
+		return "placeholder"
+	}
+	return key
 }
 
 func main() {
@@ -53,7 +89,6 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	// Register metrics
 	metrics.RegisterMetrics()
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
@@ -69,21 +104,30 @@ func main() {
 		os.Exit(1)
 	}
 
+	operatorConfig := loadOperatorConfig()
+	operatorNamespace := os.Getenv("OPERATOR_NAMESPACE")
+	if operatorNamespace == "" {
+		operatorNamespace = "tgp-system"
+	}
+
+	// Initialize providers with legacy environment variable support
 	providers := map[string]providers.ProviderClient{
-		"runpod":      runpod.NewClient(os.Getenv("RUNPOD_API_KEY")),
-		"lambda-labs": lambdalabs.NewClient(os.Getenv("LAMBDA_LABS_API_KEY")),
-		"paperspace":  paperspace.NewClient(os.Getenv("PAPERSPACE_API_KEY")),
+		"runpod":     runpod.NewClient(getAPIKey("RUNPOD_API_KEY")),
+		"lambdalabs": lambdalabs.NewClient(getAPIKey("LAMBDA_LABS_API_KEY")),
+		"paperspace": paperspace.NewClient(getAPIKey("PAPERSPACE_API_KEY")),
 	}
 
 	pricingCache := pricing.NewCache(time.Minute * 15)
 
 	if err = (&controllers.GPURequestReconciler{
-		Client:       mgr.GetClient(),
-		Scheme:       mgr.GetScheme(),
-		Log:          ctrl.Log.WithName("controllers").WithName("GPURequest"),
-		Providers:    providers,
-		PricingCache: pricingCache,
-		Metrics:      metrics.NewMetrics(),
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		Log:               ctrl.Log.WithName("controllers").WithName("GPURequest"),
+		Providers:         providers,
+		PricingCache:      pricingCache,
+		Metrics:           metrics.NewMetrics(),
+		Config:            operatorConfig,
+		OperatorNamespace: operatorNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GPURequest")
 		os.Exit(1)

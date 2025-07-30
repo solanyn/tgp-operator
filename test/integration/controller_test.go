@@ -154,9 +154,9 @@ func createTestGPURequest(name string) *tgpv1.GPURequest {
 		Spec: tgpv1.GPURequestSpec{
 			Provider: "runpod",
 			GPUType:  "RTX3090",
-			TalosConfig: tgpv1.TalosConfig{
+			TalosConfig: &tgpv1.TalosConfig{
 				Image: "factory.talos.dev/installer/test:v1.8.2",
-				TailscaleConfig: tgpv1.TailscaleConfig{
+				TailscaleConfig: &tgpv1.TailscaleConfig{
 					Hostname: "test-gpu-node",
 					Tags:     []string{"tag:k8s"},
 				},

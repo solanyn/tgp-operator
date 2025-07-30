@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -15,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	tgpv1 "github.com/solanyn/tgp-operator/pkg/api/v1"
+	"github.com/solanyn/tgp-operator/pkg/config"
 	"github.com/solanyn/tgp-operator/pkg/pricing"
 	"github.com/solanyn/tgp-operator/pkg/providers"
 )
@@ -108,10 +110,26 @@ func setupTestReconciler(t *testing.T) (*GPURequestReconciler, client.Client, co
 	if err := tgpv1.AddToScheme(scheme); err != nil {
 		t.Fatalf("Failed to add scheme: %v", err)
 	}
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatalf("Failed to add corev1 scheme: %v", err)
+	}
+
+	// Create mock Tailscale OAuth secret
+	tailscaleSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tgp-operator-secret",
+			Namespace: "test-operator-namespace",
+		},
+		Data: map[string][]byte{
+			"client-id":     []byte("test-client-id"),
+			"client-secret": []byte("test-client-secret"),
+		},
+	}
 
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithStatusSubresource(&tgpv1.GPURequest{}).
+		WithObjects(tailscaleSecret).
 		Build()
 
 	reconciler := &GPURequestReconciler{
@@ -121,7 +139,9 @@ func setupTestReconciler(t *testing.T) (*GPURequestReconciler, client.Client, co
 		Providers: map[string]providers.ProviderClient{
 			"runpod": &mockProvider{name: "runpod"},
 		},
-		PricingCache: pricing.NewCache(time.Minute * 5),
+		PricingCache:      pricing.NewCache(time.Minute * 5),
+		Config:            config.DefaultConfig(),
+		OperatorNamespace: "test-operator-namespace",
 	}
 
 	return reconciler, fakeClient, context.Background()
@@ -157,9 +177,9 @@ func TestGPURequestController_Reconcile_AddFinalizer(t *testing.T) {
 		Spec: tgpv1.GPURequestSpec{
 			Provider: "runpod",
 			GPUType:  "RTX3090",
-			TalosConfig: tgpv1.TalosConfig{
+			TalosConfig: &tgpv1.TalosConfig{
 				Image: "factory.talos.dev/installer/test:v1.8.2",
-				TailscaleConfig: tgpv1.TailscaleConfig{
+				TailscaleConfig: &tgpv1.TailscaleConfig{
 					Hostname: "test-gpu-node",
 					Tags:     []string{"tag:k8s"},
 				},
@@ -309,7 +329,9 @@ func TestGPURequestController_handlePending(t *testing.T) {
 		Providers: map[string]providers.ProviderClient{
 			"runpod": &mockProvider{name: "runpod"},
 		},
-		PricingCache: pricing.NewCache(time.Minute * 5),
+		PricingCache:      pricing.NewCache(time.Minute * 5),
+		Config:            config.DefaultConfig(),
+		OperatorNamespace: "test-namespace",
 	}
 
 	ctx := context.Background()
@@ -347,9 +369,25 @@ func TestGPURequestController_handleProvisioning(t *testing.T) {
 	if err := tgpv1.AddToScheme(scheme); err != nil {
 		t.Fatalf("Failed to add scheme: %v", err)
 	}
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatalf("Failed to add corev1 scheme: %v", err)
+	}
+
+	// Create mock Tailscale OAuth secret
+	tailscaleSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tgp-operator-secret",
+			Namespace: "test-namespace",
+		},
+		Data: map[string][]byte{
+			"client-id":     []byte("test-client-id"),
+			"client-secret": []byte("test-client-secret"),
+		},
+	}
 
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
+		WithObjects(tailscaleSecret).
 		WithStatusSubresource(&tgpv1.GPURequest{}).
 		Build()
 
@@ -373,7 +411,9 @@ func TestGPURequestController_handleProvisioning(t *testing.T) {
 			Providers: map[string]providers.ProviderClient{
 				"runpod": mockProv,
 			},
-			PricingCache: pricing.NewCache(time.Minute * 5),
+			PricingCache:      pricing.NewCache(time.Minute * 5),
+			Config:            config.DefaultConfig(),
+			OperatorNamespace: "test-namespace",
 		}
 
 		gpuRequest := &tgpv1.GPURequest{
@@ -406,6 +446,76 @@ func TestGPURequestController_handleProvisioning(t *testing.T) {
 		}
 		if gpuRequest.Status.InstanceID == "" {
 			t.Error("Expected instance ID to be set")
+		}
+	})
+}
+
+func TestGPURequestController_SimplifiedSpec(t *testing.T) {
+	t.Run("should accept GPURequest without TailscaleConfig", func(t *testing.T) {
+		reconciler, fakeClient, ctx := setupTestReconciler(t)
+
+		maxPrice := "0.50"
+		// Create a simplified GPURequest that users should be able to submit
+		gpuRequest := &tgpv1.GPURequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-simple-request",
+				Namespace: "default",
+			},
+			Spec: tgpv1.GPURequestSpec{
+				Provider:       "runpod",
+				GPUType:        "RTX3090",
+				Region:         "US",
+				MaxHourlyPrice: &maxPrice,
+				Spot:           true,
+				// Only image required - no TailscaleConfig
+				TalosConfig: &tgpv1.TalosConfig{
+					Image: "test-image",
+					// TailscaleConfig should use operator defaults
+				},
+			},
+		}
+
+		err := fakeClient.Create(ctx, gpuRequest)
+		if err != nil {
+			t.Fatalf("Failed to create GPURequest: %v", err)
+		}
+
+		// Reconcile should succeed
+		req := ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      gpuRequest.Name,
+				Namespace: gpuRequest.Namespace,
+			},
+		}
+
+		result, err := reconciler.Reconcile(ctx, req)
+		if err != nil {
+			t.Errorf("Reconcile failed: %v", err)
+		}
+		// First reconcile adds finalizer and requeues
+		if !result.Requeue {
+			t.Error("Expected requeue after adding finalizer")
+		}
+
+		// Verify the GPURequest was processed (finalizer added)
+		updatedGPURequest := &tgpv1.GPURequest{}
+		err = fakeClient.Get(ctx, types.NamespacedName{
+			Name:      gpuRequest.Name,
+			Namespace: gpuRequest.Namespace,
+		}, updatedGPURequest)
+		if err != nil {
+			t.Fatalf("Failed to get updated GPURequest: %v", err)
+		}
+
+		found := false
+		for _, finalizer := range updatedGPURequest.Finalizers {
+			if finalizer == FinalizerName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("Expected finalizer to be added")
 		}
 	})
 }

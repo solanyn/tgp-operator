@@ -1,0 +1,48 @@
+{{- if .Values.config }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "tgp-operator.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "tgp-operator.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    providers:
+      runpod:
+        enabled: {{ .Values.config.providers.runpod.enabled | default true }}
+        secretName: {{ .Values.config.providers.runpod.secretName | default "tgp-operator-secret" }}
+        {{- if .Values.config.providers.runpod.secretNamespace }}
+        secretNamespace: {{ .Values.config.providers.runpod.secretNamespace }}
+        {{- end }}
+        apiKeySecretKey: {{ .Values.config.providers.runpod.apiKeySecretKey | default "RUNPOD_API_KEY" }}
+      lambdaLabs:
+        enabled: {{ .Values.config.providers.lambdaLabs.enabled | default true }}
+        secretName: {{ .Values.config.providers.lambdaLabs.secretName | default "tgp-operator-secret" }}
+        {{- if .Values.config.providers.lambdaLabs.secretNamespace }}
+        secretNamespace: {{ .Values.config.providers.lambdaLabs.secretNamespace }}
+        {{- end }}
+        apiKeySecretKey: {{ .Values.config.providers.lambdaLabs.apiKeySecretKey | default "LAMBDA_LABS_API_KEY" }}
+      paperspace:
+        enabled: {{ .Values.config.providers.paperspace.enabled | default true }}
+        secretName: {{ .Values.config.providers.paperspace.secretName | default "tgp-operator-secret" }}
+        {{- if .Values.config.providers.paperspace.secretNamespace }}
+        secretNamespace: {{ .Values.config.providers.paperspace.secretNamespace }}
+        {{- end }}
+        apiKeySecretKey: {{ .Values.config.providers.paperspace.apiKeySecretKey | default "PAPERSPACE_API_KEY" }}
+    talos:
+      image: {{ .Values.config.talos.image | default "ghcr.io/siderolabs/talos:v1.10.5" }}
+    tailscale:
+      tags:
+        {{- range .Values.config.tailscale.tags | default (list "tag:k8s" "tag:gpu") }}
+        - {{ . | quote }}
+        {{- end }}
+      ephemeral: {{ .Values.config.tailscale.ephemeral | default true }}
+      acceptRoutes: {{ .Values.config.tailscale.acceptRoutes | default true }}
+      oauthSecretName: {{ .Values.config.tailscale.oauthSecretName | default "tgp-operator-secret" }}
+      {{- if .Values.config.tailscale.oauthSecretNamespace }}
+      oauthSecretNamespace: {{ .Values.config.tailscale.oauthSecretNamespace }}
+      {{- end }}
+      clientIdKey: {{ .Values.config.tailscale.clientIdKey | default "client-id" }}
+      clientSecretKey: {{ .Values.config.tailscale.clientSecretKey | default "client-secret" }}
+{{- end }}

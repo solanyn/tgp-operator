@@ -11,16 +11,22 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	tgpv1 "github.com/solanyn/tgp-operator/pkg/api/v1"
+	"github.com/solanyn/tgp-operator/pkg/config"
 	"github.com/solanyn/tgp-operator/pkg/metrics"
 	"github.com/solanyn/tgp-operator/pkg/pricing"
 	"github.com/solanyn/tgp-operator/pkg/providers"
+	"github.com/solanyn/tgp-operator/pkg/providers/lambdalabs"
+	"github.com/solanyn/tgp-operator/pkg/providers/paperspace"
+	"github.com/solanyn/tgp-operator/pkg/providers/runpod"
 )
 
 const (
@@ -39,11 +45,13 @@ const (
 // GPURequestReconciler reconciles a GPURequest object
 type GPURequestReconciler struct {
 	client.Client
-	Log          logr.Logger
-	Scheme       *runtime.Scheme
-	Providers    map[string]providers.ProviderClient
-	PricingCache *pricing.Cache
-	Metrics      *metrics.Metrics
+	Log               logr.Logger
+	Scheme            *runtime.Scheme
+	Providers         map[string]providers.ProviderClient
+	PricingCache      *pricing.Cache
+	Metrics           *metrics.Metrics
+	Config            *config.OperatorConfig
+	OperatorNamespace string
 }
 
 // +kubebuilder:rbac:groups=tgp.io,resources=gpurequests,verbs=get;list;watch;create;update;patch;delete
@@ -468,6 +476,12 @@ func (r *GPURequestReconciler) handleDeletion(ctx context.Context, gpuRequest *t
 		}
 	}
 
+	// Clean up Tailscale Connector if it was created
+	if err := r.cleanupTailscaleConnector(ctx, gpuRequest, log); err != nil {
+		log.Error(err, "failed to cleanup Tailscale Connector")
+		// Don't fail deletion for Tailscale cleanup issues
+	}
+
 	controllerutil.RemoveFinalizer(gpuRequest, FinalizerName)
 	if err := r.Update(ctx, gpuRequest); err != nil {
 		log.Error(err, "failed to remove finalizer")
@@ -651,28 +665,21 @@ func (r *GPURequestReconciler) processInstanceStatus(
 	}
 }
 
-// handleRunningInstance updates status for running instances
+// handleRunningInstance updates status for running instances and handles node provisioning
 func (r *GPURequestReconciler) handleRunningInstance(
 	ctx context.Context,
 	gpuRequest *tgpv1.GPURequest,
 	selectedProvider string,
 	log logr.Logger,
 ) (ctrl.Result, error) {
-	gpuRequest.Status.Phase = tgpv1.GPURequestPhaseReady
-	gpuRequest.Status.Message = "GPU instance is ready"
-	gpuRequest.Status.NodeName = fmt.Sprintf("gpu-node-%s", gpuRequest.Name)
-
-	// Record active instance metric
-	if r.Metrics != nil {
-		r.Metrics.SetInstanceActive(selectedProvider, gpuRequest.Spec.GPUType, gpuRequest.Spec.Region, 1)
-		r.Metrics.RecordGPURequest(selectedProvider, gpuRequest.Spec.GPUType, gpuRequest.Spec.Region, "ready")
+	// Check if this is the first time we're seeing this instance as running
+	if gpuRequest.Status.Phase != tgpv1.GPURequestPhaseJoining {
+		// Transition to joining phase and start node provisioning
+		return r.handleNodeProvisioning(ctx, gpuRequest, selectedProvider, log)
 	}
 
-	if err := r.updateStatusWithRetry(ctx, gpuRequest, log); err != nil {
-		log.Error(err, "failed to update status to ready")
-		return ctrl.Result{}, err
-	}
-	return ctrl.Result{RequeueAfter: RunningRequeue}, nil
+	// If we're already in joining phase, check if node is ready
+	return r.checkNodeReadiness(ctx, gpuRequest, selectedProvider, log)
 }
 
 // handleFailedInstance updates status for failed instances
@@ -798,22 +805,69 @@ func (r *GPURequestReconciler) executeLaunchRequest(
 	provider providers.ProviderClient,
 	_ logr.Logger,
 ) (*providers.GPUInstance, error) {
-	// Create resolved TalosConfig
-	resolvedTalosConfig := gpuRequest.Spec.TalosConfig
-
-	// Resolve Tailscale configuration secrets
-	resolvedTailscaleConfig, err := gpuRequest.Spec.TalosConfig.TailscaleConfig.Resolve(ctx, r.Client, gpuRequest.Namespace)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve Tailscale config secrets: %w", err)
+	// Create resolved TalosConfig - use defaults if not provided
+	var resolvedTalosConfig *tgpv1.TalosConfig
+	if gpuRequest.Spec.TalosConfig != nil {
+		resolvedTalosConfig = gpuRequest.Spec.TalosConfig
+	} else {
+		// Create default TalosConfig using operator defaults
+		if r.Config == nil {
+			return nil, fmt.Errorf("operator config is not initialized")
+		}
+		resolvedTalosConfig = &tgpv1.TalosConfig{
+			Image: r.Config.Talos.Image,
+		}
 	}
+
+	// Resolve Tailscale configuration - use centralized config if not specified
+	var resolvedTailscaleConfig *tgpv1.TailscaleConfig
+	if gpuRequest.Spec.TalosConfig != nil && gpuRequest.Spec.TalosConfig.TailscaleConfig != nil {
+		// Use user-provided TailscaleConfig
+		resolved, err := gpuRequest.Spec.TalosConfig.TailscaleConfig.Resolve(ctx, r.Client, gpuRequest.Namespace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve Tailscale config secrets: %w", err)
+		}
+		resolvedTailscaleConfig = resolved
+	} else {
+		// Use centralized operator configuration for Tailscale
+		if r.Config == nil {
+			return nil, fmt.Errorf("operator config is not initialized")
+		}
+		clientID, clientSecret, err := r.Config.GetTailscaleOAuthCredentials(ctx, r.Client, r.OperatorNamespace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get Tailscale OAuth credentials from operator config: %w", err)
+		}
+
+		// Create TailscaleConfig using operator defaults
+		secretNamespace := r.Config.Tailscale.OAuthSecretNamespace
+		if secretNamespace == "" {
+			secretNamespace = r.OperatorNamespace
+		}
+
+		resolvedTailscaleConfig = &tgpv1.TailscaleConfig{
+			Hostname:     fmt.Sprintf("%s-%s", gpuRequest.Name, gpuRequest.Spec.Provider),
+			Tags:         r.Config.Tailscale.Tags,
+			Ephemeral:    &r.Config.Tailscale.Ephemeral,
+			AcceptRoutes: &r.Config.Tailscale.AcceptRoutes,
+			OAuthCredentialsSecretRef: &tgpv1.TailscaleOAuthSecretRef{
+				Name:            r.Config.Tailscale.OAuthSecretName,
+				Namespace:       secretNamespace,
+				ClientIDKey:     r.Config.Tailscale.ClientIDKey,
+				ClientSecretKey: r.Config.Tailscale.ClientSecretKey,
+			},
+		}
+		// Validate we can access the credentials
+		_ = clientID + clientSecret // Use variables to avoid unused variable error
+	}
+
 	if resolvedTailscaleConfig != nil {
-		resolvedTalosConfig.TailscaleConfig = *resolvedTailscaleConfig
+		resolvedTalosConfig.TailscaleConfig = resolvedTailscaleConfig
 	}
 
 	launchReq := &providers.LaunchRequest{
 		GPUType:      gpuRequest.Spec.GPUType,
 		Region:       gpuRequest.Spec.Region,
-		TalosConfig:  &resolvedTalosConfig,
+		TalosConfig:  resolvedTalosConfig,
 		SpotInstance: gpuRequest.Spec.Spot,
 	}
 
@@ -871,8 +925,446 @@ func (r *GPURequestReconciler) updateLaunchStatus(
 	return r.updateStatusWithRetry(ctx, gpuRequest, log)
 }
 
+// handleNodeProvisioning initiates the node provisioning process
+func (r *GPURequestReconciler) handleNodeProvisioning(
+	ctx context.Context,
+	gpuRequest *tgpv1.GPURequest,
+	selectedProvider string,
+	log logr.Logger,
+) (ctrl.Result, error) {
+	log.Info("Starting node provisioning process", "instanceID", gpuRequest.Status.InstanceID)
+
+	// Update status to joining phase
+	gpuRequest.Status.Phase = tgpv1.GPURequestPhaseJoining
+	gpuRequest.Status.Message = "Instance running, starting node provisioning"
+
+	// Generate a proper node name
+	nodeName := fmt.Sprintf("tgp-node-%s", gpuRequest.Name)
+	gpuRequest.Status.NodeName = nodeName
+
+	// Start the actual node provisioning steps
+	if err := r.setupTalosNode(ctx, gpuRequest, log); err != nil {
+		log.Error(err, "failed to setup Talos node")
+		gpuRequest.Status.Phase = tgpv1.GPURequestPhaseFailed
+		gpuRequest.Status.Message = fmt.Sprintf("Failed to setup Talos node: %v", err)
+		if updateErr := r.updateStatusWithRetry(ctx, gpuRequest, log); updateErr != nil {
+			log.Error(updateErr, "failed to update failed status")
+		}
+		return ctrl.Result{RequeueAfter: FailedRequeue}, nil
+	}
+
+	if err := r.updateStatusWithRetry(ctx, gpuRequest, log); err != nil {
+		log.Error(err, "failed to update status to joining")
+		return ctrl.Result{}, err
+	}
+
+	// Quick requeue to check node readiness
+	return ctrl.Result{RequeueAfter: ProvisioningRequeue}, nil
+}
+
+// checkNodeReadiness checks if the node has successfully joined the cluster
+func (r *GPURequestReconciler) checkNodeReadiness(
+	ctx context.Context,
+	gpuRequest *tgpv1.GPURequest,
+	selectedProvider string,
+	log logr.Logger,
+) (ctrl.Result, error) {
+	log.Info("Checking node readiness", "nodeName", gpuRequest.Status.NodeName)
+
+	// Check if a Kubernetes Node with this name exists and is ready
+	nodeReady, err := r.checkKubernetesNodeReady(ctx, gpuRequest.Status.NodeName, log)
+	if err != nil {
+		log.Error(err, "failed to check node readiness")
+		gpuRequest.Status.Message = fmt.Sprintf("Error checking node readiness: %v", err)
+		if updateErr := r.updateStatusWithRetry(ctx, gpuRequest, log); updateErr != nil {
+			log.Error(updateErr, "failed to update status")
+		}
+		return ctrl.Result{RequeueAfter: ProvisioningRequeue}, nil
+	}
+
+	if nodeReady {
+		// Node is ready! Mark GPURequest as ready
+		gpuRequest.Status.Phase = tgpv1.GPURequestPhaseReady
+		gpuRequest.Status.Message = "Node has joined cluster and is ready"
+
+		// Record active instance metric
+		if r.Metrics != nil {
+			r.Metrics.SetInstanceActive(selectedProvider, gpuRequest.Spec.GPUType, gpuRequest.Spec.Region, 1)
+			r.Metrics.RecordGPURequest(selectedProvider, gpuRequest.Spec.GPUType, gpuRequest.Spec.Region, "ready")
+		}
+
+		if err := r.updateStatusWithRetry(ctx, gpuRequest, log); err != nil {
+			log.Error(err, "failed to update status to ready")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: RunningRequeue}, nil
+	}
+
+	// Node not ready yet, continue waiting
+	gpuRequest.Status.Message = "Waiting for node to join cluster and become ready"
+	if err := r.updateStatusWithRetry(ctx, gpuRequest, log); err != nil {
+		log.Error(err, "failed to update status")
+	}
+	return ctrl.Result{RequeueAfter: ProvisioningRequeue}, nil
+}
+
+// checkKubernetesNodeReady checks if a Kubernetes node exists and is ready
+func (r *GPURequestReconciler) checkKubernetesNodeReady(ctx context.Context, nodeName string, log logr.Logger) (bool, error) {
+	var node corev1.Node
+	err := r.Get(ctx, types.NamespacedName{Name: nodeName}, &node)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("Node not found yet", "nodeName", nodeName)
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to get node %s: %w", nodeName, err)
+	}
+
+	// Check if the node has the Ready condition set to True
+	for _, condition := range node.Status.Conditions {
+		if condition.Type == corev1.NodeReady {
+			if condition.Status == corev1.ConditionTrue {
+				log.Info("Node is ready", "nodeName", nodeName)
+				return true, nil
+			} else {
+				log.Info("Node exists but not ready", "nodeName", nodeName, "status", condition.Status, "reason", condition.Reason)
+				return false, nil
+			}
+		}
+	}
+
+	log.Info("Node exists but Ready condition not found", "nodeName", nodeName)
+	return false, nil
+}
+
+// setupTalosNode handles the Talos OS configuration and bootstrapping
+func (r *GPURequestReconciler) setupTalosNode(ctx context.Context, gpuRequest *tgpv1.GPURequest, log logr.Logger) error {
+	log.Info("Setting up Talos OS node", "nodeName", gpuRequest.Status.NodeName)
+
+	// Generate Talos machine configuration
+	machineConfig, err := r.generateTalosMachineConfig(ctx, gpuRequest, log)
+	if err != nil {
+		return fmt.Errorf("failed to generate Talos machine config: %w", err)
+	}
+
+	// Apply configuration to the instance
+	if err := r.applyTalosConfiguration(ctx, gpuRequest, machineConfig, log); err != nil {
+		return fmt.Errorf("failed to apply Talos configuration: %w", err)
+	}
+
+	// Set up Tailscale networking if configured
+	if gpuRequest.Spec.TalosConfig != nil && gpuRequest.Spec.TalosConfig.TailscaleConfig != nil {
+		if err := r.setupTailscaleNetwork(ctx, gpuRequest, log); err != nil {
+			log.Error(err, "failed to setup Tailscale networking, proceeding without it")
+			// Don't fail the entire provisioning if Tailscale setup fails
+		}
+	}
+
+	log.Info("Talos node setup initiated successfully")
+	return nil
+}
+
+// generateTalosMachineConfig generates a Talos machine configuration for the node
+func (r *GPURequestReconciler) generateTalosMachineConfig(ctx context.Context, gpuRequest *tgpv1.GPURequest, log logr.Logger) (string, error) {
+	log.Info("Generating Talos machine configuration")
+
+	// Get cluster information from operator config
+	if r.Config == nil {
+		return "", fmt.Errorf("operator config not available for Talos setup")
+	}
+
+	// Ensure Talos cluster credentials are loaded
+	if err := r.Config.GetTalosClusterCredentials(ctx, r.Client, r.OperatorNamespace); err != nil {
+		return "", fmt.Errorf("failed to get Talos cluster credentials: %w", err)
+	}
+
+	// Generate machine config YAML
+	// This is a basic template - in production, this should be more comprehensive
+	machineConfig := fmt.Sprintf(`version: v1alpha1
+debug: false
+persist: true
+machine:
+  type: worker
+  token: %s
+  ca:
+    crt: %s
+  certSANs: []
+  kubelet:
+    image: %s
+    extraArgs:
+      rotate-server-certificates: true
+    nodeIP:
+      validSubnets: []
+  network:
+    hostname: %s
+    nameservers:
+      - 8.8.8.8
+      - 1.1.1.1
+  install:
+    disk: /dev/sda
+    image: %s
+    bootloader: true
+    wipe: false
+  features:
+    rbac: true
+    stableHostname: true
+cluster:
+  id: %s
+  secret: %s
+  controlPlane:
+    endpoint: %s
+  clusterName: %s
+  network:
+    dnsDomain: cluster.local
+    podSubnets:
+      - 10.244.0.0/16
+    serviceSubnets:
+      - 10.96.0.0/12
+  proxy:
+    disabled: false
+  discovery:
+    enabled: true
+    registries:
+      kubernetes:
+        disabled: false
+      service:
+        disabled: false`,
+		r.Config.Talos.MachineToken,
+		r.Config.Talos.ClusterCA,
+		r.getKubeletImage(gpuRequest),
+		gpuRequest.Status.NodeName,
+		r.getTalosImage(gpuRequest),
+		r.Config.Talos.ClusterID,
+		r.Config.Talos.ClusterSecret,
+		r.Config.Talos.ControlPlaneEndpoint,
+		r.Config.Talos.ClusterName,
+	)
+
+	return machineConfig, nil
+}
+
+// applyTalosConfiguration sends the machine configuration to the Talos instance
+func (r *GPURequestReconciler) applyTalosConfiguration(ctx context.Context, gpuRequest *tgpv1.GPURequest, machineConfig string, log logr.Logger) error {
+	log.Info("Applying Talos configuration to instance", "instanceID", gpuRequest.Status.InstanceID)
+
+	// TODO: In a real implementation, this would:
+	// 1. Connect to the Talos instance via its API (typically port 50000)
+	// 2. Apply the machine configuration using the Talos API client
+	// 3. Wait for the configuration to be applied and the node to restart
+	// 4. Verify that the node successfully joins the cluster
+
+	// For now, we'll simulate this process
+	log.Info("Talos configuration applied successfully (simulated)")
+	return nil
+}
+
+// setupTailscaleNetwork configures Tailscale networking by creating a Connector resource
+func (r *GPURequestReconciler) setupTailscaleNetwork(ctx context.Context, gpuRequest *tgpv1.GPURequest, log logr.Logger) error {
+	log.Info("Setting up Tailscale network integration")
+
+	tailscaleConfig := gpuRequest.Spec.TalosConfig.TailscaleConfig
+
+	// Create a Tailscale Connector resource for this GPU node
+	if err := r.createTailscaleConnector(ctx, gpuRequest, tailscaleConfig, log); err != nil {
+		return fmt.Errorf("failed to create Tailscale Connector: %w", err)
+	}
+
+	log.Info("Tailscale Connector created successfully",
+		"hostname", tailscaleConfig.Hostname,
+		"tags", tailscaleConfig.Tags)
+
+	return nil
+}
+
+// createTailscaleConnector creates a Tailscale Connector CRD for the GPU node
+func (r *GPURequestReconciler) createTailscaleConnector(ctx context.Context, gpuRequest *tgpv1.GPURequest, tailscaleConfig *tgpv1.TailscaleConfig, log logr.Logger) error {
+	// Generate hostname if not provided
+	hostname := tailscaleConfig.Hostname
+	if hostname == "" {
+		hostname = fmt.Sprintf("gpu-node-%s", gpuRequest.Name)
+	}
+
+	// Use default tags if not provided
+	tags := tailscaleConfig.Tags
+	if len(tags) == 0 {
+		tags = []string{"tag:k8s", "tag:gpu-node"}
+	}
+
+	// Create the Connector resource using unstructured client
+	// This avoids the need to import Tailscale operator types directly
+	connectorSpec := map[string]interface{}{
+		"hostname": hostname,
+		"tags":     tags,
+	}
+
+	// Add subnet router configuration if routes are specified
+	if len(tailscaleConfig.AdvertiseRoutes) > 0 {
+		connectorSpec["subnetRouter"] = map[string]interface{}{
+			"advertiseRoutes": tailscaleConfig.AdvertiseRoutes,
+		}
+	}
+
+	// Create the Tailscale Connector CRD resource
+	connector := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "tailscale.com/v1alpha1",
+			"kind":       "Connector",
+			"metadata": map[string]interface{}{
+				"name": fmt.Sprintf("gpu-node-%s", gpuRequest.Name),
+				"labels": map[string]interface{}{
+					"tgp.io/gpu-request": gpuRequest.Name,
+					"tgp.io/managed":     "true",
+				},
+			},
+			"spec": connectorSpec,
+		},
+	}
+
+	if err := r.Create(ctx, connector); err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("failed to create Tailscale Connector: %w", err)
+	}
+
+	log.Info("Tailscale Connector configuration prepared", "hostname", hostname, "tags", tags)
+	return nil
+}
+
+// cleanupTailscaleConnector removes the Tailscale Connector resource for a GPURequest
+func (r *GPURequestReconciler) cleanupTailscaleConnector(ctx context.Context, gpuRequest *tgpv1.GPURequest, log logr.Logger) error {
+	connectorName := fmt.Sprintf("gpu-node-%s", gpuRequest.Name)
+
+	connector := &unstructured.Unstructured{}
+	connector.SetAPIVersion("tailscale.com/v1alpha1")
+	connector.SetKind("Connector")
+	connector.SetName(connectorName)
+
+	err := r.Delete(ctx, connector)
+	if err != nil && !errors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete Tailscale Connector %s: %w", connectorName, err)
+	}
+
+	if errors.IsNotFound(err) {
+		log.Info("Tailscale Connector not found, already cleaned up", "connectorName", connectorName)
+	} else {
+		log.Info("Tailscale Connector deleted successfully", "connectorName", connectorName)
+	}
+
+	return nil
+}
+
+// getKubeletImage returns the appropriate kubelet image for the GPU type
+func (r *GPURequestReconciler) getKubeletImage(gpuRequest *tgpv1.GPURequest) string {
+	// Use GPU-optimized kubelet image if available
+	if gpuRequest.Spec.GPUType == "H100" || gpuRequest.Spec.GPUType == "A100" {
+		return "ghcr.io/siderolabs/kubelet:v1.31.1-nvidia"
+	}
+	return "ghcr.io/siderolabs/kubelet:v1.31.1"
+}
+
+// getTalosImage returns the appropriate Talos image for the configuration
+func (r *GPURequestReconciler) getTalosImage(gpuRequest *tgpv1.GPURequest) string {
+	if gpuRequest.Spec.TalosConfig != nil && gpuRequest.Spec.TalosConfig.Image != "" {
+		return gpuRequest.Spec.TalosConfig.Image
+	}
+	// Default Talos image with GPU support
+	return "factory.talos.dev/installer/nvidia-container-toolkit:v1.8.2"
+}
+
+// getProviderClient returns a provider client with credentials resolved from centralized config
+func (r *GPURequestReconciler) getProviderClient(ctx context.Context, providerName string) (providers.ProviderClient, error) {
+	if r.Config == nil {
+		// Fallback to static providers map for backwards compatibility
+		if client, exists := r.Providers[providerName]; exists {
+			return client, nil
+		}
+		return nil, fmt.Errorf("provider %s not found and config not initialized", providerName)
+	}
+
+	// Get API key from centralized config
+	apiKey, err := r.Config.GetProviderCredentials(ctx, r.Client, providerName, r.OperatorNamespace)
+	if err != nil {
+		// Fallback to static providers map if centralized config fails
+		if client, exists := r.Providers[providerName]; exists {
+			return client, nil
+		}
+		return nil, fmt.Errorf("failed to get credentials for provider %s: %w", providerName, err)
+	}
+
+	// Dynamically create provider client with resolved credentials
+	switch providerName {
+	case "runpod":
+		return runpod.NewClient(apiKey), nil
+	case "lambdalabs":
+		return lambdalabs.NewClient(apiKey), nil
+	case "paperspace":
+		return paperspace.NewClient(apiKey), nil
+	default:
+		return nil, fmt.Errorf("unknown provider: %s", providerName)
+	}
+}
+
+// ValidateProviderCredentials validates all enabled provider credentials during startup
+func (r *GPURequestReconciler) ValidateProviderCredentials(ctx context.Context) error {
+	if r.Config == nil {
+		r.Log.Info("Config not initialized, skipping credential validation")
+		return nil
+	}
+
+	var validationErrors []string
+
+	// Validate each enabled provider
+	providers := []struct {
+		name   string
+		config config.ProviderConfig
+	}{
+		{"runpod", r.Config.Providers.RunPod},
+		{"lambdalabs", r.Config.Providers.LambdaLabs},
+		{"paperspace", r.Config.Providers.Paperspace},
+	}
+
+	for _, p := range providers {
+		if !p.config.Enabled {
+			r.Log.Info("Provider disabled, skipping validation", "provider", p.name)
+			continue
+		}
+
+		r.Log.Info("Validating provider credentials", "provider", p.name)
+
+		// Get provider client with credentials
+		client, err := r.getProviderClient(ctx, p.name)
+		if err != nil {
+			validationErrors = append(validationErrors, fmt.Sprintf("%s: %v", p.name, err))
+			continue
+		}
+
+		// Test credentials with a simple API call (GetNormalizedPricing is a good test since it requires authentication)
+		// Use a simple test that doesn't require specific GPU types
+		_, err = client.GetNormalizedPricing(ctx, "RTX3090", "")
+		if err != nil {
+			validationErrors = append(validationErrors, fmt.Sprintf("%s: credential validation failed: %v", p.name, err))
+			continue
+		}
+
+		// Get provider info for logging
+		info := client.GetProviderInfo()
+		r.Log.Info("Provider credentials validated successfully", "provider", p.name, "providerInfo", info.Name)
+	}
+
+	if len(validationErrors) > 0 {
+		return fmt.Errorf("provider credential validation failed: %v", validationErrors)
+	}
+
+	r.Log.Info("All enabled provider credentials validated successfully")
+	return nil
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *GPURequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Validate provider credentials on startup
+	ctx := context.Background()
+	if err := r.ValidateProviderCredentials(ctx); err != nil {
+		return fmt.Errorf("controller setup failed due to invalid provider credentials: %w", err)
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&tgpv1.GPURequest{}).
 		Complete(r)

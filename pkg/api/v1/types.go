@@ -39,7 +39,7 @@ type GPURequestSpec struct {
 	Spot bool `json:"spot,omitempty"`
 
 	// TalosConfig contains Talos-specific configuration
-	TalosConfig TalosConfig `json:"talosConfig"`
+	TalosConfig *TalosConfig `json:"talosConfig,omitempty"`
 }
 
 // TalosConfig contains Talos node configuration
@@ -48,7 +48,8 @@ type TalosConfig struct {
 	Image string `json:"image"`
 
 	// TailscaleConfig contains Tailscale mesh networking configuration
-	TailscaleConfig TailscaleConfig `json:"tailscaleConfig"`
+	// +optional
+	TailscaleConfig *TailscaleConfig `json:"tailscaleConfig,omitempty"`
 }
 
 // TailscaleConfig contains Tailscale mesh networking configuration
