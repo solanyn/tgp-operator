@@ -10,7 +10,7 @@
 ### {{ .Title }}
 
 {{ range .Commits -}}
-* {{ if .Scope }}**{{ .Scope }}:** {{ end }}{{ .Subject }} ([{{ .Hash.Short }}]({{ $.Info.RepositoryURL }}/commit/{{ .Hash.Long }}))
+* {{ if .Scope }}**{{ .Scope }}:** {{ end }}{{ .Subject }} ([{{ .Hash.Short }}]({{ $.Info.RepositoryURL }}/commit/{{ .Hash.Long }})){{- if .Author.Email }}{{- if contains .Author.Email "@users.noreply.github.com" }} by @{{ regexReplaceAll "^\\d+\\+(.+)@users\\.noreply\\.github\\.com$" .Author.Email "${1}" }}{{- else if eq .Author.Name "solanyn" }} by @solanyn{{- end }}{{- end }}
 {{ end }}
 
 {{ end -}}
