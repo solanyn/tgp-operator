@@ -5,7 +5,6 @@ import (
 	"os"
 	"time"
 
-	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -16,12 +15,7 @@ import (
 	tgpv1 "github.com/solanyn/tgp-operator/pkg/api/v1"
 	"github.com/solanyn/tgp-operator/pkg/config"
 	"github.com/solanyn/tgp-operator/pkg/controllers"
-	"github.com/solanyn/tgp-operator/pkg/metrics"
 	"github.com/solanyn/tgp-operator/pkg/pricing"
-	"github.com/solanyn/tgp-operator/pkg/providers"
-	"github.com/solanyn/tgp-operator/pkg/providers/lambdalabs"
-	"github.com/solanyn/tgp-operator/pkg/providers/paperspace"
-	"github.com/solanyn/tgp-operator/pkg/providers/runpod"
 )
 
 var (
@@ -34,41 +28,6 @@ func init() { //nolint:gochecknoinits // Required for Kubernetes scheme registra
 	utilruntime.Must(tgpv1.AddToScheme(scheme))
 }
 
-// loadOperatorConfig loads configuration from file or returns defaults
-func loadOperatorConfig() *config.OperatorConfig {
-	configPath := "/etc/tgp-operator/config.yaml"
-
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		setupLog.Info("Config file not found, using defaults", "path", configPath)
-		return config.DefaultConfig()
-	}
-
-	// Read config file
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		setupLog.Error(err, "Failed to read config file, using defaults", "path", configPath)
-		return config.DefaultConfig()
-	}
-
-	var cfg config.OperatorConfig
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		setupLog.Error(err, "Failed to parse config file, using defaults", "path", configPath)
-		return config.DefaultConfig()
-	}
-
-	setupLog.Info("Loaded operator configuration from file", "path", configPath)
-	return &cfg
-}
-
-// getAPIKey retrieves API key from environment variables for legacy support
-func getAPIKey(envVar string) string {
-	key := os.Getenv(envVar)
-	if key == "" {
-		setupLog.Info("API key not found in environment", "variable", envVar, "note", "Provider will use centralized config at runtime")
-		return "placeholder"
-	}
-	return key
-}
 
 func main() {
 	var metricsAddr string
@@ -89,8 +48,6 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	metrics.RegisterMetrics()
-
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                  scheme,
 		Metrics:                 ctrl.Options{}.Metrics,
@@ -104,32 +61,29 @@ func main() {
 		os.Exit(1)
 	}
 
-	operatorConfig := loadOperatorConfig()
-	operatorNamespace := os.Getenv("OPERATOR_NAMESPACE")
-	if operatorNamespace == "" {
-		operatorNamespace = "tgp-system"
-	}
-
-	// Initialize providers with legacy environment variable support
-	providers := map[string]providers.ProviderClient{
-		"runpod":     runpod.NewClient(getAPIKey("RUNPOD_API_KEY")),
-		"lambdalabs": lambdalabs.NewClient(getAPIKey("LAMBDA_LABS_API_KEY")),
-		"paperspace": paperspace.NewClient(getAPIKey("PAPERSPACE_API_KEY")),
-	}
-
 	pricingCache := pricing.NewCache(time.Minute * 15)
+	operatorConfig := config.DefaultConfig() // Basic config for credential helpers
 
-	if err = (&controllers.GPURequestReconciler{
-		Client:            mgr.GetClient(),
-		Scheme:            mgr.GetScheme(),
-		Log:               ctrl.Log.WithName("controllers").WithName("GPURequest"),
-		Providers:         providers,
-		PricingCache:      pricingCache,
-		Metrics:           metrics.NewMetrics(),
-		Config:            operatorConfig,
-		OperatorNamespace: operatorNamespace,
+	// Setup GPUNodeClass controller
+	if err = (&controllers.GPUNodeClassReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+		Log:    ctrl.Log.WithName("controllers").WithName("GPUNodeClass"),
+		Config: operatorConfig,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "GPURequest")
+		setupLog.Error(err, "unable to create controller", "controller", "GPUNodeClass")
+		os.Exit(1)
+	}
+
+	// Setup GPUNodePool controller
+	if err = (&controllers.GPUNodePoolReconciler{
+		Client:       mgr.GetClient(),
+		Scheme:       mgr.GetScheme(),
+		Log:          ctrl.Log.WithName("controllers").WithName("GPUNodePool"),
+		Config:       operatorConfig,
+		PricingCache: pricingCache,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "GPUNodePool")
 		os.Exit(1)
 	}
 

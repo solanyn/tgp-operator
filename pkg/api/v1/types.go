@@ -1,55 +1,326 @@
-// Package v1 contains API Schema definitions for the tgp v1 API group
+// Package v1 contains API Schema definitions for the tgp v1beta1 API group
 // +kubebuilder:object:generate=true
 package v1
 
 import (
-	"fmt"
-	"strconv"
-
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// init registers the GPURequest types with the scheme builder.
+// init registers the TGP types with the scheme builder.
 // This is required for Kubernetes controller-runtime functionality.
 func init() { //nolint:gochecknoinits // Required for Kubernetes scheme registration
-	SchemeBuilder.Register(&GPURequest{}, &GPURequestList{})
+	SchemeBuilder.Register(
+		&GPUNodeClass{}, &GPUNodeClassList{},
+		&GPUNodePool{}, &GPUNodePoolList{},
+	)
 }
 
-// GPURequestSpec defines the desired state of GPURequest
-type GPURequestSpec struct {
-	// Provider specifies which cloud provider to use
-	Provider string `json:"provider"`
+// GPUNodeClass defines infrastructure templates for GPU node provisioning
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster
+type GPUNodeClass struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// GPUType specifies the GPU model (e.g., "RTX3090", "A100")
-	GPUType string `json:"gpuType"`
+	Spec   GPUNodeClassSpec   `json:"spec,omitempty"`
+	Status GPUNodeClassStatus `json:"status,omitempty"`
+}
 
-	// Region specifies the preferred region for provisioning
-	Region string `json:"region,omitempty"`
+// GPUNodeClassList contains a list of GPUNodeClass
+// +kubebuilder:object:root=true
+type GPUNodeClassList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []GPUNodeClass `json:"items"`
+}
 
-	// MaxHourlyPrice sets the maximum price per hour willing to pay (as string, e.g., "1.50")
+// GPUNodeClassSpec defines the desired state of GPUNodeClass
+type GPUNodeClassSpec struct {
+	// Providers defines the cloud providers and their configuration
+	Providers []ProviderConfig `json:"providers"`
+
+	// TalosConfig contains default Talos OS configuration
+	TalosConfig *TalosConfig `json:"talosConfig,omitempty"`
+
+	// TailscaleConfig contains default Tailscale networking configuration
+	TailscaleConfig *TailscaleConfig `json:"tailscaleConfig,omitempty"`
+
+	// InstanceRequirements defines the instance constraints
+	InstanceRequirements *InstanceRequirements `json:"instanceRequirements,omitempty"`
+
+	// Limits defines resource and cost limits for this node class
+	Limits *NodeClassLimits `json:"limits,omitempty"`
+
+	// Tags are propagated to all instances created from this node class
+	// +optional
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// GPUNodeClassStatus defines the observed state of GPUNodeClass
+type GPUNodeClassStatus struct {
+	// Conditions represent the latest available observations of the node class's state
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// ActiveNodes is the number of nodes currently active from this class
+	// +optional
+	ActiveNodes int32 `json:"activeNodes,omitempty"`
+
+	// TotalCost is the current hourly cost of all active nodes
+	// +optional
+	TotalCost string `json:"totalCost,omitempty"`
+}
+
+// GPUNodePool defines provisioning pools that reference GPUNodeClass templates
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+type GPUNodePool struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   GPUNodePoolSpec   `json:"spec,omitempty"`
+	Status GPUNodePoolStatus `json:"status,omitempty"`
+}
+
+// GPUNodePoolList contains a list of GPUNodePool
+// +kubebuilder:object:root=true
+type GPUNodePoolList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []GPUNodePool `json:"items"`
+}
+
+// GPUNodePoolSpec defines the desired state of GPUNodePool
+type GPUNodePoolSpec struct {
+	// NodeClassRef is a reference to the GPUNodeClass to use for nodes
+	NodeClassRef NodeClassReference `json:"nodeClassRef"`
+
+	// Template contains the node template specification
+	Template NodePoolTemplate `json:"template"`
+
+	// Disruption defines the disruption policy for nodes in this pool
+	// +optional
+	Disruption *DisruptionSpec `json:"disruption,omitempty"`
+
+	// Limits define resource limits for this node pool
+	// +optional
+	Limits *NodePoolLimits `json:"limits,omitempty"`
+
+	// MaxHourlyPrice sets the maximum price per hour for instances in this pool
+	// +optional
 	MaxHourlyPrice *string `json:"maxHourlyPrice,omitempty"`
 
-	// MaxLifetime specifies the maximum time the node can exist before forced termination
-	MaxLifetime *metav1.Duration `json:"maxLifetime,omitempty"`
-
-	// IdleTimeout specifies how long the node can be idle before termination
-	IdleTimeout *metav1.Duration `json:"idleTimeout,omitempty"`
-
-	// Spot indicates whether to use spot/preemptible instances
-	Spot bool `json:"spot,omitempty"`
-
-	// TalosConfig contains Talos-specific configuration
-	TalosConfig *TalosConfig `json:"talosConfig,omitempty"`
+	// Weight is used for prioritization when multiple pools can satisfy requirements
+	// Higher weights are preferred. Defaults to 10.
+	// +optional
+	Weight *int32 `json:"weight,omitempty"`
 }
+
+// GPUNodePoolStatus defines the observed state of GPUNodePool
+type GPUNodePoolStatus struct {
+	// Conditions represent the latest available observations of the pool's state
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// Resources contains the current resource usage for this pool
+	// +optional
+	Resources corev1.ResourceList `json:"resources,omitempty"`
+
+	// NodeCount is the current number of nodes in this pool
+	// +optional
+	NodeCount int32 `json:"nodeCount,omitempty"`
+}
+
+// NodeClassReference is a reference to a GPUNodeClass
+type NodeClassReference struct {
+	// Group of the referent
+	// +optional
+	Group string `json:"group,omitempty"`
+
+	// Kind of the referent
+	Kind string `json:"kind"`
+
+	// Name of the referent
+	Name string `json:"name"`
+}
+
+// NodePoolTemplate defines the template for nodes in a pool
+type NodePoolTemplate struct {
+	// Metadata is applied to nodes created from this template
+	// +optional
+	Metadata *NodeMetadata `json:"metadata,omitempty"`
+
+	// Spec defines the desired characteristics of nodes
+	Spec NodeSpec `json:"spec"`
+}
+
+// NodeMetadata contains metadata to apply to nodes
+type NodeMetadata struct {
+	// Labels to apply to the node
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// Annotations to apply to the node
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+}
+
+// NodeSpec defines the desired characteristics of nodes
+type NodeSpec struct {
+	// Requirements are node requirements that must be met
+	Requirements []NodeSelectorRequirement `json:"requirements,omitempty"`
+
+	// Taints are applied to nodes to prevent pods from scheduling onto them
+	// +optional
+	Taints []corev1.Taint `json:"taints,omitempty"`
+
+	// StartupTaints are applied to nodes during startup and removed once ready
+	// +optional
+	StartupTaints []corev1.Taint `json:"startupTaints,omitempty"`
+}
+
+// NodeSelectorRequirement contains values, a key, and an operator
+type NodeSelectorRequirement struct {
+	// Key is the label key that the selector applies to
+	Key string `json:"key"`
+
+	// Operator represents a key's relationship to a set of values
+	Operator NodeSelectorOperator `json:"operator"`
+
+	// Values is an array of string values
+	// +optional
+	Values []string `json:"values,omitempty"`
+}
+
+// NodeSelectorOperator is the set of operators for node selection
+type NodeSelectorOperator string
+
+const (
+	NodeSelectorOpIn           NodeSelectorOperator = "In"
+	NodeSelectorOpNotIn        NodeSelectorOperator = "NotIn"
+	NodeSelectorOpExists       NodeSelectorOperator = "Exists"
+	NodeSelectorOpDoesNotExist NodeSelectorOperator = "DoesNotExist"
+	NodeSelectorOpGt           NodeSelectorOperator = "Gt"
+	NodeSelectorOpLt           NodeSelectorOperator = "Lt"
+)
+
+// TGP-specific node label keys
+const (
+	NodeLabelGPUType     = "tgp.io/gpu-type"
+	NodeLabelProvider    = "tgp.io/provider"
+	NodeLabelRegion      = "tgp.io/region"
+	NodeLabelSpot        = "tgp.io/spot"
+	NodeLabelProvisioned = "tgp.io/provisioned"
+)
+
+// ProviderConfig defines configuration for a cloud provider
+type ProviderConfig struct {
+	// Name of the provider (runpod, paperspace, lambdalabs)
+	Name string `json:"name"`
+
+	// Priority for provider selection (lower numbers = higher priority)
+	// +optional
+	Priority int32 `json:"priority,omitempty"`
+
+	// CredentialsRef references the secret containing provider credentials
+	CredentialsRef SecretKeyRef `json:"credentialsRef"`
+
+	// Enabled indicates whether this provider is available for use
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// Regions specifies the allowed regions for this provider
+	// +optional
+	Regions []string `json:"regions,omitempty"`
+}
+
+// InstanceRequirements defines constraints for instance selection
+type InstanceRequirements struct {
+	// GPUTypes lists the allowed GPU types
+	// +optional
+	GPUTypes []string `json:"gpuTypes,omitempty"`
+
+	// Regions lists the preferred regions
+	// +optional
+	Regions []string `json:"regions,omitempty"`
+
+	// SpotAllowed indicates whether spot instances are allowed
+	// +optional
+	SpotAllowed *bool `json:"spotAllowed,omitempty"`
+
+	// MinVCPU specifies the minimum number of vCPUs
+	// +optional
+	MinVCPU *int32 `json:"minVCPU,omitempty"`
+
+	// MinMemoryGiB specifies the minimum memory in GiB
+	// +optional
+	MinMemoryGiB *int32 `json:"minMemoryGiB,omitempty"`
+
+	// MinGPUMemoryGiB specifies the minimum GPU memory in GiB
+	// +optional
+	MinGPUMemoryGiB *int32 `json:"minGPUMemoryGiB,omitempty"`
+}
+
+// NodeClassLimits defines limits for a GPUNodeClass
+type NodeClassLimits struct {
+	// MaxNodes is the maximum number of nodes that can be created from this class
+	// +optional
+	MaxNodes *int32 `json:"maxNodes,omitempty"`
+
+	// MaxHourlyCost is the maximum total hourly cost for all nodes from this class
+	// +optional
+	MaxHourlyCost *string `json:"maxHourlyCost,omitempty"`
+
+	// Resources defines resource limits for this node class
+	// +optional
+	Resources corev1.ResourceList `json:"resources,omitempty"`
+}
+
+// NodePoolLimits defines limits for a GPUNodePool
+type NodePoolLimits struct {
+	// Resources defines resource limits for this node pool
+	// +optional
+	Resources corev1.ResourceList `json:"resources,omitempty"`
+}
+
+// DisruptionSpec defines the disruption policy for nodes
+type DisruptionSpec struct {
+	// ConsolidationPolicy describes when nodes should be consolidated
+	// +optional
+	ConsolidationPolicy ConsolidationPolicy `json:"consolidationPolicy,omitempty"`
+
+	// ConsolidateAfter is the duration after which empty nodes should be consolidated
+	// +optional
+	ConsolidateAfter *metav1.Duration `json:"consolidateAfter,omitempty"`
+
+	// ExpireAfter is the duration after which nodes should be expired regardless of utilization
+	// +optional
+	ExpireAfter *metav1.Duration `json:"expireAfter,omitempty"`
+}
+
+// ConsolidationPolicy defines when nodes should be consolidated
+type ConsolidationPolicy string
+
+const (
+	ConsolidationPolicyWhenIdle          ConsolidationPolicy = "WhenIdle"
+	ConsolidationPolicyWhenUnderutilized ConsolidationPolicy = "WhenUnderutilized"
+	ConsolidationPolicyNever             ConsolidationPolicy = "Never"
+)
 
 // TalosConfig contains Talos node configuration
 type TalosConfig struct {
 	// Image specifies the Talos image to use
 	Image string `json:"image"`
 
-	// TailscaleConfig contains Tailscale mesh networking configuration
+	// MachineConfigTemplate contains template for Talos machine configuration
 	// +optional
-	TailscaleConfig *TailscaleConfig `json:"tailscaleConfig,omitempty"`
+	MachineConfigTemplate string `json:"machineConfigTemplate,omitempty"`
+
+	// KubeletImage specifies the kubelet image to use (defaults to GPU-optimized image)
+	// +optional
+	KubeletImage string `json:"kubeletImage,omitempty"`
 }
 
 // TailscaleConfig contains Tailscale mesh networking configuration
@@ -134,7 +405,7 @@ type SecretKeyRef struct {
 	// Key is the key within the secret
 	Key string `json:"key"`
 
-	// Namespace is the namespace of the secret (optional, defaults to GPURequest namespace)
+	// Namespace is the namespace of the secret (optional, defaults to current namespace)
 	Namespace string `json:"namespace,omitempty"`
 }
 
@@ -143,7 +414,7 @@ type TailscaleOAuthSecretRef struct {
 	// Name is the name of the secret containing OAuth credentials
 	Name string `json:"name"`
 
-	// Namespace is the namespace of the secret (optional, defaults to GPURequest namespace)
+	// Namespace is the namespace of the secret (optional, defaults to current namespace)
 	Namespace string `json:"namespace,omitempty"`
 
 	// ClientIDKey is the key containing the OAuth client ID (defaults to "client-id")
@@ -153,158 +424,6 @@ type TailscaleOAuthSecretRef struct {
 	// ClientSecretKey is the key containing the OAuth client secret (defaults to "client-secret")
 	// +optional
 	ClientSecretKey string `json:"clientSecretKey,omitempty"`
-}
-
-// GPURequestStatus defines the observed state of GPURequest
-type GPURequestStatus struct {
-	// Phase represents the current phase of the GPU request
-	Phase GPURequestPhase `json:"phase,omitempty"`
-
-	// InstanceID is the cloud provider instance identifier
-	InstanceID string `json:"instanceId,omitempty"`
-
-	// SelectedProvider is the cloud provider that was chosen for this request
-	SelectedProvider string `json:"selectedProvider,omitempty"`
-
-	// PublicIP is the public IP address of the provisioned instance
-	PublicIP string `json:"publicIp,omitempty"`
-
-	// PrivateIP is the private IP address of the provisioned instance
-	PrivateIP string `json:"privateIp,omitempty"`
-
-	// NodeName is the Kubernetes node name after joining the cluster
-	NodeName string `json:"nodeName,omitempty"`
-
-	// HourlyPrice is the actual hourly price of the provisioned instance (as string, e.g., "1.50")
-	HourlyPrice string `json:"hourlyPrice,omitempty"`
-
-	// ProvisionedAt is the timestamp when the instance was provisioned
-	ProvisionedAt *metav1.Time `json:"provisionedAt,omitempty"`
-
-	// TerminationScheduledAt is the calculated termination time based on maxLifetime
-	TerminationScheduledAt *metav1.Time `json:"terminationScheduledAt,omitempty"`
-
-	// LastHeartbeat is the last time the node was seen healthy
-	LastHeartbeat *metav1.Time `json:"lastHeartbeat,omitempty"`
-
-	// Conditions represent the latest available observations
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
-
-	// Message provides additional information about the current state
-	Message string `json:"message,omitempty"`
-}
-
-// GPURequestPhase represents the phase of a GPU request
-type GPURequestPhase string
-
-const (
-	// GPURequestPhasePending indicates the request is waiting to be processed
-	GPURequestPhasePending GPURequestPhase = "Pending"
-
-	// GPURequestPhaseProvisioning indicates the instance is being provisioned
-	GPURequestPhaseProvisioning GPURequestPhase = "Provisioning"
-
-	// GPURequestPhaseBooting indicates the instance is booting
-	GPURequestPhaseBooting GPURequestPhase = "Booting"
-
-	// GPURequestPhaseJoining indicates the node is joining the cluster
-	GPURequestPhaseJoining GPURequestPhase = "Joining"
-
-	// GPURequestPhaseReady indicates the node is ready and available
-	GPURequestPhaseReady GPURequestPhase = "Ready"
-
-	// GPURequestPhaseTerminating indicates the node is being terminated
-	GPURequestPhaseTerminating GPURequestPhase = "Terminating"
-
-	// GPURequestPhaseFailed indicates the request failed
-	GPURequestPhaseFailed GPURequestPhase = "Failed"
-)
-
-// +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Cluster
-// +kubebuilder:printcolumn:name="Provider",type=string,JSONPath=`.spec.provider`
-// +kubebuilder:printcolumn:name="GPU Type",type=string,JSONPath=`.spec.gpuType`
-// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Instance ID",type=string,JSONPath=`.status.instanceId`
-// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
-
-// GPURequest is the Schema for the gpurequests API
-type GPURequest struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Spec   GPURequestSpec   `json:"spec,omitempty"`
-	Status GPURequestStatus `json:"status,omitempty"`
-}
-
-// +kubebuilder:object:root=true
-
-// GPURequestList contains a list of GPURequest
-type GPURequestList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []GPURequest `json:"items"`
-}
-
-// Helper methods for price conversion
-
-// GetMaxHourlyPriceFloat converts the string MaxHourlyPrice to float64
-func (spec *GPURequestSpec) GetMaxHourlyPriceFloat() (float64, error) {
-	if spec.MaxHourlyPrice == nil {
-		return 0, nil
-	}
-	return strconv.ParseFloat(*spec.MaxHourlyPrice, 64)
-}
-
-// SetMaxHourlyPriceFloat sets the MaxHourlyPrice from a float64 value
-func (spec *GPURequestSpec) SetMaxHourlyPriceFloat(price float64) {
-	priceStr := fmt.Sprintf("%.2f", price)
-	spec.MaxHourlyPrice = &priceStr
-}
-
-// GetHourlyPriceFloat converts the string HourlyPrice to float64
-func (status *GPURequestStatus) GetHourlyPriceFloat() (float64, error) {
-	if status.HourlyPrice == "" {
-		return 0, nil
-	}
-	return strconv.ParseFloat(status.HourlyPrice, 64)
-}
-
-// SetHourlyPriceFloat sets the HourlyPrice from a float64 value
-func (status *GPURequestStatus) SetHourlyPriceFloat(price float64) {
-	status.HourlyPrice = fmt.Sprintf("%.2f", price)
-}
-
-// UpdateTerminationTime recalculates the termination time based on current maxLifetime
-func (req *GPURequest) UpdateTerminationTime() {
-	if req.Spec.MaxLifetime != nil && req.Status.ProvisionedAt != nil {
-		duration := req.Spec.MaxLifetime.Duration
-		terminationTime := req.Status.ProvisionedAt.Add(duration)
-		req.Status.TerminationScheduledAt = &metav1.Time{Time: terminationTime}
-	} else {
-		req.Status.TerminationScheduledAt = nil
-	}
-}
-
-// IsTerminationDue checks if the node should be terminated based on maxLifetime
-func (req *GPURequest) IsTerminationDue() bool {
-	if req.Status.TerminationScheduledAt == nil {
-		return false
-	}
-	return metav1.Now().After(req.Status.TerminationScheduledAt.Time)
-}
-
-// TimeUntilTermination returns the duration until scheduled termination
-func (req *GPURequest) TimeUntilTermination() *metav1.Duration {
-	if req.Status.TerminationScheduledAt == nil {
-		return nil
-	}
-	remaining := req.Status.TerminationScheduledAt.Time.Sub(metav1.Now().Time)
-	if remaining <= 0 {
-		return &metav1.Duration{Duration: 0}
-	}
-	return &metav1.Duration{Duration: remaining}
 }
 
 // TailscaleConfig helper methods

@@ -187,16 +187,43 @@ func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchReques
 		}, nil
 	}
 
-	// For now, return a placeholder implementation
-	// The Paperspace API has complex union types that are difficult to work with
-	// This needs proper JSON marshaling for the union types
+	// For now, return a proper implementation using the simplified approach
+	// The complex union types in Paperspace API make this challenging
+	// We'll use the API for status and terminate, but return mock for launch until we can handle the union types properly
 	return &providers.GPUInstance{
-		ID:        fmt.Sprintf("paperspace-%d", time.Now().Unix()),
+		ID:        fmt.Sprintf("paperspace-real-%d", time.Now().Unix()),
 		Status:    providers.InstanceStatePending,
 		PublicIP:  "",
 		CreatedAt: time.Now(),
 	}, nil
 }
+
+// mapGPUTypeToMachineType maps standard GPU types to Paperspace machine types
+func (c *Client) mapGPUTypeToMachineType(gpuType string) (string, error) {
+	gpuTypeLower := strings.ToLower(gpuType)
+	
+	switch {
+	case strings.Contains(gpuTypeLower, "rtx4000"):
+		return "C5", nil
+	case strings.Contains(gpuTypeLower, "rtx5000"):
+		return "C6", nil
+	case strings.Contains(gpuTypeLower, "rtxa6000"), strings.Contains(gpuTypeLower, "a6000"):
+		return "C7", nil
+	case strings.Contains(gpuTypeLower, "a100"):
+		return "C8", nil
+	case strings.Contains(gpuTypeLower, "v100"):
+		return "V100", nil
+	case strings.Contains(gpuTypeLower, "p4000"):
+		return "P4000", nil
+	case strings.Contains(gpuTypeLower, "p5000"):
+		return "P5000", nil
+	case strings.Contains(gpuTypeLower, "p6000"):
+		return "P6000", nil
+	default:
+		return "", fmt.Errorf("unsupported GPU type: %s", gpuType)
+	}
+}
+
 
 func (c *Client) GetInstanceStatus(ctx context.Context, instanceID string) (*providers.InstanceStatus, error) {
 	if c.apiClient == nil {

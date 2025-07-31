@@ -1,0 +1,299 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: gpunodepools.tgp.io
+spec:
+  group: tgp.io
+  names:
+    kind: GPUNodePool
+    listKind: GPUNodePoolList
+    plural: gpunodepools
+    singular: gpunodepool
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: GPUNodePool defines provisioning pools that reference GPUNodeClass
+          templates
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: GPUNodePoolSpec defines the desired state of GPUNodePool
+            properties:
+              disruption:
+                description: Disruption defines the disruption policy for nodes in
+                  this pool
+                properties:
+                  consolidateAfter:
+                    description: ConsolidateAfter is the duration after which empty
+                      nodes should be consolidated
+                    type: string
+                  consolidationPolicy:
+                    description: ConsolidationPolicy describes when nodes should be
+                      consolidated
+                    type: string
+                  expireAfter:
+                    description: ExpireAfter is the duration after which nodes should
+                      be expired regardless of utilization
+                    type: string
+                type: object
+              limits:
+                description: Limits define resource limits for this node pool
+                properties:
+                  resources:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: Resources defines resource limits for this node pool
+                    type: object
+                type: object
+              maxHourlyPrice:
+                description: MaxHourlyPrice sets the maximum price per hour for instances
+                  in this pool
+                type: string
+              nodeClassRef:
+                description: NodeClassRef is a reference to the GPUNodeClass to use
+                  for nodes
+                properties:
+                  group:
+                    description: Group of the referent
+                    type: string
+                  kind:
+                    description: Kind of the referent
+                    type: string
+                  name:
+                    description: Name of the referent
+                    type: string
+                required:
+                - kind
+                - name
+                type: object
+              template:
+                description: Template contains the node template specification
+                properties:
+                  metadata:
+                    description: Metadata is applied to nodes created from this template
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        description: Annotations to apply to the node
+                        type: object
+                      labels:
+                        additionalProperties:
+                          type: string
+                        description: Labels to apply to the node
+                        type: object
+                    type: object
+                  spec:
+                    description: Spec defines the desired characteristics of nodes
+                    properties:
+                      requirements:
+                        description: Requirements are node requirements that must
+                          be met
+                        items:
+                          description: NodeSelectorRequirement contains values, a
+                            key, and an operator
+                          properties:
+                            key:
+                              description: Key is the label key that the selector
+                                applies to
+                              type: string
+                            operator:
+                              description: Operator represents a key's relationship
+                                to a set of values
+                              type: string
+                            values:
+                              description: Values is an array of string values
+                              items:
+                                type: string
+                              type: array
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        type: array
+                      startupTaints:
+                        description: StartupTaints are applied to nodes during startup
+                          and removed once ready
+                        items:
+                          description: |-
+                            The node this Taint is attached to has the "effect" on
+                            any pod that does not tolerate the Taint.
+                          properties:
+                            effect:
+                              description: |-
+                                Required. The effect of the taint on pods
+                                that do not tolerate the taint.
+                                Valid effects are NoSchedule, PreferNoSchedule and NoExecute.
+                              type: string
+                            key:
+                              description: Required. The taint key to be applied to
+                                a node.
+                              type: string
+                            timeAdded:
+                              description: |-
+                                TimeAdded represents the time at which the taint was added.
+                                It is only written for NoExecute taints.
+                              format: date-time
+                              type: string
+                            value:
+                              description: The taint value corresponding to the taint
+                                key.
+                              type: string
+                          required:
+                          - effect
+                          - key
+                          type: object
+                        type: array
+                      taints:
+                        description: Taints are applied to nodes to prevent pods from
+                          scheduling onto them
+                        items:
+                          description: |-
+                            The node this Taint is attached to has the "effect" on
+                            any pod that does not tolerate the Taint.
+                          properties:
+                            effect:
+                              description: |-
+                                Required. The effect of the taint on pods
+                                that do not tolerate the taint.
+                                Valid effects are NoSchedule, PreferNoSchedule and NoExecute.
+                              type: string
+                            key:
+                              description: Required. The taint key to be applied to
+                                a node.
+                              type: string
+                            timeAdded:
+                              description: |-
+                                TimeAdded represents the time at which the taint was added.
+                                It is only written for NoExecute taints.
+                              format: date-time
+                              type: string
+                            value:
+                              description: The taint value corresponding to the taint
+                                key.
+                              type: string
+                          required:
+                          - effect
+                          - key
+                          type: object
+                        type: array
+                    type: object
+                required:
+                - spec
+                type: object
+              weight:
+                description: |-
+                  Weight is used for prioritization when multiple pools can satisfy requirements
+                  Higher weights are preferred. Defaults to 10.
+                format: int32
+                type: integer
+            required:
+            - nodeClassRef
+            - template
+            type: object
+          status:
+            description: GPUNodePoolStatus defines the observed state of GPUNodePool
+            properties:
+              conditions:
+                description: Conditions represent the latest available observations
+                  of the pool's state
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              nodeCount:
+                description: NodeCount is the current number of nodes in this pool
+                format: int32
+                type: integer
+              resources:
+                additionalProperties:
+                  anyOf:
+                  - type: integer
+                  - type: string
+                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                  x-kubernetes-int-or-string: true
+                description: Resources contains the current resource usage for this
+                  pool
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

@@ -2,7 +2,7 @@
 image:
   repository: ghcr.io/solanyn/tgp-operator
   tag: latest
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 controller:
   replicas: 1
   resources: {}
@@ -16,61 +16,15 @@ controller:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+health:
+  port: 8081
+metrics:
+  port: 8080
 serviceAccount:
   create: true
   name: tgp-operator
   annotations: {}
 rbac:
   create: true
-# Operator Configuration
-config:
-  # Provider configurations
-  providers:
-    runpod:
-      enabled: true
-      secretName: tgp-operator-secret
-      secretNamespace: ""  # Defaults to operator namespace
-      apiKeySecretKey: RUNPOD_API_KEY
-    lambdaLabs:
-      enabled: true
-      secretName: tgp-operator-secret
-      secretNamespace: ""  # Defaults to operator namespace
-      apiKeySecretKey: LAMBDA_LABS_API_KEY
-    paperspace:
-      enabled: true
-      secretName: tgp-operator-secret
-      secretNamespace: ""  # Defaults to operator namespace
-      apiKeySecretKey: PAPERSPACE_API_KEY
-  
-  # Talos default configuration
-  talos:
-    image: "ghcr.io/siderolabs/talos:v1.10.5"
-  
-  # Tailscale default configuration
-  tailscale:
-    tags:
-      - "tag:k8s"
-      - "tag:gpu"
-    ephemeral: true
-    acceptRoutes: true
-    oauthSecretName: tgp-operator-secret
-    oauthSecretNamespace: ""  # Defaults to operator namespace
-    clientIdKey: client-id
-    clientSecretKey: client-secret
-
-# Legacy provider configuration (deprecated, use config.providers instead)
-providers:
-  runpod:
-    secretName: tgp-operator-secret
-    secretKey: RUNPOD_API_KEY
-  lambdaLabs:
-    secretName: tgp-operator-secret
-    secretKey: LAMBDA_LABS_API_KEY
-  paperspace:
-    secretName: tgp-operator-secret
-    secretKey: PAPERSPACE_API_KEY
-metrics:
-  enabled: true
-  port: 8080
-health:
-  port: 8081
+# Configuration is now managed through GPUNodeClass CRDs
+# See examples/ directory for sample configurations

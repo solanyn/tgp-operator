@@ -1,535 +1,545 @@
-# Providers
+# Provider Integration Architecture
 
-This document describes how the Talos GPU Provisioner operator integrates with various cloud GPU providers, including API endpoints, data models and spot instance capabilities.
+This document describes the technical architecture for integrating cloud GPU providers with the TGP operator, including CRD interactions, API client implementations, and code generation patterns.
 
-## Overview
+## Architecture Overview
 
-The Talos GPU Provisioner operator abstracts different cloud GPU providers through a unified interface. Each provider client implements the `ProviderClient` interface defined in `pkg/providers/interface.go`.
+The TGP operator uses a two-layer architecture for provider integration:
 
-## Provider Interface
+1. **CRD Layer**: `GPUNodeClass` resources define provider configurations and credentials
+2. **Client Layer**: Provider-specific clients implement the `ProviderClient` interface
+
+## CRD-to-Provider Integration
+
+### GPUNodeClass Configuration
+
+The `GPUNodeClass` CRD configures providers through a declarative API:
+
+```go
+type ProviderConfig struct {
+    Name           string              `json:"name"`
+    Priority       int32               `json:"priority,omitempty"`
+    Enabled        bool                `json:"enabled,omitempty"`
+    CredentialsRef SecretReference     `json:"credentialsRef"`
+    Regions        []string            `json:"regions,omitempty"`
+}
+```
+
+### Controller-Provider Interaction
+
+The `GPUNodeClassReconciler` validates provider configurations and credentials:
+
+1. **Credential Resolution**: Fetches API keys from Kubernetes secrets
+2. **Provider Instantiation**: Creates provider clients with resolved credentials
+3. **Validation**: Tests provider connectivity and credential validity
+4. **Status Updates**: Reports provider availability in CRD status
+
+### GPUNodePool Provisioning Flow
+
+The `GPUNodePoolReconciler` uses `GPUNodeClass` configurations to provision instances:
+
+1. **Node Class Resolution**: References `GPUNodeClass` for provider configurations
+2. **Provider Selection**: Chooses providers based on priority and availability
+3. **Instance Provisioning**: Calls provider `LaunchInstance` methods
+4. **Status Tracking**: Monitors instance lifecycle through provider `GetInstanceStatus`
+
+### Implementation Pattern
+
+```go
+// Controller resolves providers from node class
+func (r *GPUNodePoolReconciler) resolveProviders(ctx context.Context, nodeClass *v1.GPUNodeClass) (map[string]providers.ProviderClient, error) {
+    clients := make(map[string]providers.ProviderClient)
+
+    for _, providerConfig := range nodeClass.Spec.Providers {
+        // Fetch credentials from secret
+        credential, err := r.getProviderCredentials(ctx, &providerConfig.CredentialsRef)
+        if err != nil {
+            return nil, err
+        }
+
+        // Instantiate provider client
+        client, err := r.createProviderClient(providerConfig.Name, credential)
+        if err != nil {
+            return nil, err
+        }
+
+        clients[providerConfig.Name] = client
+    }
+
+    return clients, nil
+}
+```
+
+## Provider Client Interface
+
+All provider clients implement a standardized interface for lifecycle operations:
 
 ```go
 type ProviderClient interface {
-    // Core lifecycle operations
+    // Instance lifecycle
     LaunchInstance(ctx context.Context, req *LaunchRequest) (*GPUInstance, error)
     TerminateInstance(ctx context.Context, instanceID string) error
     GetInstanceStatus(ctx context.Context, instanceID string) (*InstanceStatus, error)
 
-    // Discovery and pricing with normalization
+    // Resource discovery
     ListAvailableGPUs(ctx context.Context, filters *GPUFilters) ([]GPUOffer, error)
     GetNormalizedPricing(ctx context.Context, gpuType, region string) (*NormalizedPricing, error)
 
-    // Provider metadata and capabilities
+    // Provider capabilities
     GetProviderInfo() *ProviderInfo
     GetRateLimits() *RateLimitInfo
-
-    // Resource translation between standard and provider-specific names
     TranslateGPUType(standard string) (providerSpecific string, err error)
     TranslateRegion(standard string) (providerSpecific string, err error)
 }
 ```
 
-## Provider Implementations
+### Client Implementation Patterns
 
-### 1. Vast.ai
+Provider clients are implemented using different approaches:
 
-**Base URL**: `https://console.vast.ai/api/v0`
-**API Documentation**: [Vast.ai API Documentation](https://vast.ai/docs/api/overview/)
+1. **REST APIs**: OpenAPI code generation for type-safe clients
+2. **GraphQL APIs**: Code generation from GraphQL schemas
+3. **Manual Implementation**: Custom HTTP clients for simple APIs
 
-#### Endpoints Used:
-- **List Offers**: `GET /bundles` - Get available GPU instances with filters
-- **Launch Instance**: `PUT /asks/{offer_id}/` - Launch a specific offer
-- **Instance Status**: `GET /instances/{instance_id}/` - Get status of specific instance
-- **Terminate Instance**: `DELETE /instances/{instance_id}/` - Stop an instance
+## Provider Implementation Details
 
-#### API Authentication:
-- Uses API key in `Authorization: Bearer {token}` header
-- Content-Type: `application/json` for POST/PUT requests
+### Lambda Labs - OpenAPI Generated Client
 
-#### Request/Response Examples:
+**Implementation**: `pkg/providers/lambdalabs/`
+**API Type**: REST API with OpenAPI specification
+**Base URL**: `https://cloud.lambdalabs.com`
 
-**List Offers Request:**
-```http
-GET /bundles?verified=true&external=false&rentable=true HTTP/1.1
-Host: console.vast.ai
-Authorization: Bearer {api_key}
+#### Code Generation
+
+The Lambda Labs client uses OpenAPI code generation:
+
+```bash
+# Generated from OpenAPI spec
+oapi-codegen -package api -generate client,types \
+  https://cloud.lambdalabs.com/api/openapi.json > pkg/providers/lambdalabs/api/client.go
 ```
 
-**Launch Instance Request:**
-```http
-PUT /asks/{offer_id}/ HTTP/1.1
-Host: console.vast.ai
-Authorization: Bearer {api_key}
-Content-Type: application/json
-
-{
-  "client_id": "beta",
-  "image": "ubuntu:20.04",
-  "args": [],
-  "env": {},
-  "onstart": "echo 'Starting'"
-}
-```
-
-#### Data Models:
-```go
-type vastOffer struct {
-    ID            int     `json:"id"`
-    GPUName       string  `json:"gpu_name"`
-    NumGPUs       int     `json:"num_gpus"`
-    DpPh          float64 `json:"dph_total"` // Price per hour
-    RAMAmount     float64 `json:"ram_amount"` // GB
-    DiskSpace     float64 `json:"disk_space"` // GB
-    Available     bool    `json:"available"`
-    CountryCode   string  `json:"geolocation"`
-    Verified      bool    `json:"verified"`
-    Reliability   float64 `json:"reliability"`
-}
-
-type vastInstance struct {
-    ID        int    `json:"id"`
-    Status    string `json:"actual_status"` // "running", "exited", etc.
-    PublicIP  string `json:"public_ipaddr"`
-    SSHHost   string `json:"ssh_host"`
-    SSHPort   int    `json:"ssh_port"`
-}
-```
-
-#### Spot Instance Support:
-- **Current**: Vast.ai offers both interruptible and dedicated instances
-- **API Field**: `interruptible` boolean in instance creation
-- **Pricing**: Interruptible instances typically 60-80% cheaper
-- **Implementation Status**: ⚠️ Not yet implemented in our client
-
-#### Rate Limits:
-- 60 requests per minute per API key
-- HTTP timeout: 30 seconds
-
----
-
-### 2. Lambda Labs
-
-**Base URL**: `https://cloud.lambdalabs.com/api/v1/`
-**API Documentation**: [Lambda Labs API Documentation](https://docs.lambdalabs.com/cloud/)
-
-#### Current Implementation Status: 
-🚧 **STUB IMPLEMENTATION** - Returns mock data only
-
-#### API Design (To Be Implemented):
-
-**Endpoints:**
-- **List Instance Types**: `GET /instance-types` - Available GPU configurations
-- **Launch Instance**: `POST /instance-operations/launch` - Create new instance
-- **Instance Status**: `GET /instances` - List all instances
-- **Terminate Instance**: `POST /instance-operations/terminate` - Stop instance
-
-#### API Authentication:
-- Uses API key in `Authorization: Bearer {token}` header
-
-#### Current Mock Data:
-```go
-// Current stub returns static data:
-{
-    ID:          "lambda-offer-123",
-    Provider:    "lambda-labs", 
-    GPUType:     gpuType,
-    Region:      region,
-    HourlyPrice: 0.45,
-    Memory:      24,
-    Storage:     200,
-    Available:   true,
-}
-```
-
-#### Target Data Models (From API Docs):
-```go
-type lambdaInstanceType struct {
-    Name        string            `json:"name"`
-    Price       lambdaPricing     `json:"price_cents_per_hour"`
-    Specs       lambdaSpecs       `json:"instance_type"`
-    Regions     map[string]bool   `json:"regions_with_capacity_available"`
-}
-```
-
-#### Spot Instance Support:
-- **Current**: Lambda Labs doesn't offer traditional spot instances
-- **Alternative**: Reserved instances with hourly billing
-- **Implementation Status**: ⚠️ No spot support available from provider
-
----
-
-### 3. RunPod
-
-**Base URL**: `https://api.runpod.io/graphql`
-**API Documentation**: [RunPod GraphQL API](https://docs.runpod.io/docs/api/graphql)
-
-#### Current Implementation Status:
-🚧 **STUB IMPLEMENTATION** - Returns mock data only
-
-#### API Design (To Be Implemented):
-
-**GraphQL Endpoint**: Single endpoint for all operations
-- **Query**: `podRentInterruptable` - List available spot instances
-- **Query**: `pods` - Get instance status
-- **Mutation**: `podRentInterruptable` - Launch spot instance  
-- **Mutation**: `podTerminate` - Stop instance
-
-#### API Authentication:
-- Uses API key in `Authorization: Bearer {token}` header
-
-#### Current Implementation Details:
-```go
-// Current provider info:
-info := &providers.ProviderInfo{
-    Name:                  "runpod",
-    APIVersion:            "v1", 
-    SupportedRegions:      []string{"us-east", "us-west"},
-    SupportedGPUTypes:     []string{"RTX4090", "H100", "A100"},
-    SupportsSpotInstances: true,
-    BillingGranularity:    providers.BillingPerSecond,
-}
-
-// GPU type translations:
-translations := map[string]string{
-    "RTX4090": "NVIDIA GeForce RTX 4090",
-    "H100":    "NVIDIA H100", 
-    "A100":    "NVIDIA A100",
-}
-
-// Region translations:
-translations := map[string]string{
-    "us-east": "US-CA-1",
-    "us-west": "US-TX-1", 
-}
-```
-
-#### Current Mock Data:
-```go
-{
-    ID:          "runpod-offer-123",
-    Provider:    "runpod",
-    GPUType:     filters.GPUType,
-    Region:      filters.Region, 
-    HourlyPrice: 0.38,
-    Memory:      24,
-    Storage:     100,
-    Available:   true,
-}
-```
-
-#### Target Data Models (GraphQL):
-```graphql
-type Pod {
-  id: String!
-  name: String
-  runtime: PodRuntime
-  machine: Machine
-  costPerHr: Float
-}
-
-type Machine {
-  podHostId: String!
-  gpuCount: Int!
-  gpuDisplayName: String!
-  memoryInGb: Int!
-  diskInGb: Int!
-}
-```
-
-#### Spot Instance Support:
-- **Current**: RunPod offers "interruptible" instances (spot equivalent)
-- **API**: Separate GraphQL mutations for spot vs on-demand
-- **Pricing**: Typically 50-70% cheaper than on-demand
-- **Implementation Status**: ⚠️ Needs full GraphQL API implementation
-
-#### Rate Limits:
-- 20 requests per second
-- 1000 requests per minute  
-- Burst capacity: 50
-
----
-
-### 4. Paperspace
-
-**Base URL**: `https://api.paperspace.io/`
-**API Documentation**: [Paperspace Core API](https://docs.paperspace.com/core/api-reference/)
-
-#### Current Implementation Status:
-🚧 **STUB IMPLEMENTATION** - Returns mock data only
-
-#### API Design (To Be Implemented):
-
-**Endpoints:**
-- **List Machines**: `GET /machines/getAvailability` - Available GPU types
-- **Launch Instance**: `POST /machines/createMachine` - Create new machine
-- **Instance Status**: `GET /machines/{machineId}` - Get machine details
-- **Terminate Instance**: `POST /machines/{machineId}/stop` - Stop machine
-
-#### API Authentication:
-- Uses API key in `X-API-Key` header
-
-#### Current Mock Data:
-```go
-{
-    ID:          "paperspace-offer-123",
-    Provider:    "paperspace",
-    GPUType:     gpuType,
-    Region:      region,
-    HourlyPrice: 0.51,
-    Memory:      24,
-    Storage:     50,
-    Available:   true,
-}
-```
-
-#### Spot Instance Support:
-- **Current**: Paperspace offers preemptible instances
-- **API Field**: `isPreemptible` boolean in machine creation
-- **Pricing**: Up to 80% cheaper than dedicated instances
-- **Implementation Status**: ⚠️ Needs full API implementation
-
-#### Rate Limits:
-- 10 requests per second (estimated from current stub)
-
----
-
-## Implementation Status Summary
-
-### Production Ready:
-- **Vast.ai**: ✅ Full API implementation with real HTTP calls
-
-### Development Required:
-- **Lambda Labs**: 🚧 Stub implementation - needs full API integration
-- **RunPod**: 🚧 Stub implementation - needs GraphQL integration  
-- **Paperspace**: 🚧 Stub implementation - needs REST API integration
-
-## Authentication & Error Handling Patterns
-
-### Current Patterns:
-
-#### Vast.ai (Implemented):
-```go
-// Authentication
-req.Header.Set("Authorization", "Bearer "+c.apiKey)
-req.Header.Set("Content-Type", "application/json")
-
-// Error Handling
-if resp.StatusCode != http.StatusOK {
-    return fmt.Errorf("API request failed with status %d", resp.StatusCode)
-}
-```
-
-#### Other Providers (To Be Implemented):
-- **Lambda Labs**: Bearer token authentication
-- **RunPod**: Bearer token with GraphQL
-- **Paperspace**: X-API-Key header authentication
-
-### Error Handling Strategy:
-- HTTP status code validation
-- JSON response parsing
-- Rate limit detection (HTTP 429)
-- Retry logic with exponential backoff (implemented in BaseProvider)
-
-## Spot Instance Implementation Strategy
-
-### Current Status by Provider:
-
-1. **Vast.ai**: ⚠️ API supports interruptible instances, not yet implemented
-2. **Lambda Labs**: ❌ No spot instance support available
-3. **RunPod**: ⚠️ Supports interruptible instances, needs GraphQL implementation
-4. **Paperspace**: ⚠️ Supports preemptible instances, needs API implementation
-
-### Current Implementation Gaps:
-
-1. **Provider Clients**: Only stubs exist for Lambda Labs, RunPod, Paperspace
-2. **Spot Fields**: `SpotPrice` and `IsSpot` fields not populated in `GPUOffer`
-3. **Filtering**: No handling of `SpotOnly`/`OnDemandOnly` filters
-4. **Pricing Logic**: Controller doesn't differentiate spot vs on-demand pricing
-5. **Interruption Handling**: No detection of spot interruptions
-
-### Implementation Plan
-
-#### Phase 1: Complete Basic API Integration
-- Implement full API clients for Lambda Labs, RunPod, Paperspace
-- Replace stub methods with real API calls
-- Add proper error handling and rate limiting
-
-#### Phase 2: Spot Instance Enhancement
-- Update Vast.ai client to support interruptible instances
-- Add spot instance support to RunPod and Paperspace clients
-- Populate `SpotPrice` and `IsSpot` fields in `GPUOffer`
-- Implement spot/on-demand filtering in `ListAvailableGPUs`
-
-#### Phase 3: Controller Logic Enhancement
-- Enhance instance selection to prefer spot when requested
-- Add spot price validation against `MaxHourlyPrice`
-- Update metrics to track spot vs on-demand usage
-
-#### Phase 4: Interruption Handling
-- Add interruption detection via provider status APIs
-- Implement graceful handling of spot terminations
-- Add automatic restart logic with spot preferences
-
-## API Update Strategy
-
-### Monitoring Provider API Changes
-
-#### Detection Methods:
-1. **Version Headers**: Monitor API version headers in responses
-2. **Error Patterns**: Watch for new error codes or deprecation warnings
-3. **Response Schema**: Validate response structure against expected models
-4. **Provider Announcements**: Subscribe to provider API change notifications
-
-#### Implementation Approach:
+#### Client Structure
 
 ```go
-// API Version Tracking
-type APIVersion struct {
-    Provider     string    `json:"provider"`
-    Version      string    `json:"version"`
-    LastChecked  time.Time `json:"last_checked"`
-    IsSupported  bool      `json:"is_supported"`
-    DeprecatedAt *time.Time `json:"deprecated_at,omitempty"`
+type Client struct {
+    apiKey    string
+    apiClient *api.ClientWithResponses  // Generated OpenAPI client
 }
 
-// Response Validation
-func (c *Client) validateResponse(resp *http.Response, data interface{}) error {
-    // Check for deprecation warnings
-    if warning := resp.Header.Get("Deprecation"); warning != "" {
-        log.Warnf("API deprecation warning: %s", warning)
-    }
-    
-    // Validate API version compatibility
-    if version := resp.Header.Get("API-Version"); version != c.expectedVersion {
-        return fmt.Errorf("API version mismatch: expected %s, got %s", 
-            c.expectedVersion, version)
-    }
-    
+// Authentication is handled through request editor
+api.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
+    req.Header.Set("Authorization", "Bearer "+apiKey)
     return nil
-}
+})
 ```
 
-### Maintenance Strategy:
+#### API Operations
 
-#### 1. **Backward Compatibility Layer**
-- Maintain support for multiple API versions when possible
-- Use feature flags to toggle between API versions
-- Implement adapter patterns for schema changes
+- `ListInstanceTypesWithResponse()` - Discovers available GPU types
+- `LaunchInstanceWithResponse()` - Creates new instances
+- `GetInstanceWithResponse()` - Retrieves instance status
+- `TerminateInstanceWithResponse()` - Terminates instances
 
-#### 2. **Gradual Migration Process**
+#### Type Mapping
+
+The client maps OpenAPI-generated types to provider interface types:
+
 ```go
-// Example: Multi-version support
-type ProviderClient interface {
-    GetAPIVersion() string
-    SupportsFeature(feature string) bool
-    // ... existing methods
-}
-
-// Feature detection
-func (c *VastClient) SupportsFeature(feature string) bool {
-    switch c.apiVersion {
-    case "v1":
-        return feature != "interruptible_instances"
-    case "v2":
-        return true // supports all features
-    default:
-        return false
-    }
-}
-```
-
-#### 3. **Update Workflow**
-1. **Detection**: Monitor for API changes via automated checks
-2. **Assessment**: Evaluate impact on existing functionality
-3. **Planning**: Create migration timeline and backward compatibility strategy
-4. **Implementation**: Update client code with feature flags
-5. **Testing**: Validate against both old and new API versions
-6. **Deployment**: Gradual rollout with monitoring
-7. **Cleanup**: Remove deprecated code after grace period
-
-#### 4. **Automated Monitoring**
-```go
-// Health check with API version validation
-func (c *Client) healthCheck(ctx context.Context) error {
-    resp, err := c.makeRequest(ctx, "GET", "/health", nil)
+func (c *Client) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFilters) ([]providers.GPUOffer, error) {
+    resp, err := c.apiClient.ListInstanceTypesWithResponse(ctx)
     if err != nil {
-        return err
+        return nil, fmt.Errorf("failed to list instance types: %w", err)
     }
-    
-    // Track API version changes
-    currentVersion := resp.Header.Get("API-Version")
-    if currentVersion != c.lastKnownVersion {
-        c.logVersionChange(c.lastKnownVersion, currentVersion)
-        c.lastKnownVersion = currentVersion
+
+    var offers []providers.GPUOffer
+    for _, item := range resp.JSON200.Data {
+        instanceType := item.InstanceType
+        pricePerHour := float64(instanceType.PriceCentsPerHour) / 100.0
+
+        for _, region := range item.RegionsWithCapacityAvailable {
+            offer := providers.GPUOffer{
+                ID:          fmt.Sprintf("%s-%s", instanceType.Name, string(region.Name)),
+                Provider:    "lambda-labs",
+                GPUType:     instanceType.GpuDescription,
+                Region:      string(region.Name),
+                HourlyPrice: pricePerHour,
+                Memory:      int64(instanceType.Specs.MemoryGib),
+                Storage:     int64(instanceType.Specs.StorageGib),
+                Available:   true,
+                IsSpot:      false, // Lambda Labs doesn't support spot instances
+            }
+            offers = append(offers, offer)
+        }
     }
-    
-    return nil
+    return offers, nil
 }
 ```
 
-### Documentation Maintenance:
+### RunPod - GraphQL Generated Client
 
-#### 1. **Change Log Tracking**
-- Maintain a CHANGELOG.md for each provider integration
-- Document API version compatibility matrix
-- Track deprecation timelines and migration paths
+**Implementation**: `pkg/providers/runpod/`
+**API Type**: GraphQL API with schema-based generation
+**Endpoint**: `https://api.runpod.io/graphql`
 
-#### 2. **Regular Review Schedule**
-- Monthly API compatibility checks
-- Quarterly documentation updates
-- Semi-annual full integration reviews
+#### Code Generation
 
-#### 3. **Provider Communication**
-- Establish contacts with provider API teams when possible
-- Subscribe to provider API mailing lists and changelogs
-- Participate in provider developer communities
+The RunPod client uses GraphQL code generation with genqlient:
 
-### Emergency Response:
+```yaml
+# genqlient.yaml
+schema: pkg/providers/runpod/schema.graphql
+operations:
+  - pkg/providers/runpod/queries.graphql
+generated: pkg/providers/runpod/generated.go
+package: runpod
+```
 
-#### Breaking Changes:
-1. **Immediate**: Feature flag to disable affected provider
-2. **Short-term**: Hotfix for critical functionality
-3. **Medium-term**: Full implementation update
-4. **Long-term**: Architecture improvements based on lessons learned
+#### GraphQL Operations
 
-#### Provider Deprecation:
-1. **Assessment**: Evaluate provider usage and criticality
-2. **Communication**: Notify users of upcoming changes
-3. **Migration**: Provide alternative provider recommendations
-4. **Sunset**: Graceful removal with sufficient notice period
+Queries and mutations are defined in `.graphql` files:
 
-## Testing Strategy
+```graphql
+# queries.graphql
+query ListGPUTypes {
+  gpuTypes {
+    id
+    displayName
+    memoryInGb
+    communityPrice
+    communitySpotPrice
+  }
+}
 
-### Mock Providers
-- Current test providers return static data
-- Need to add spot instance scenarios for testing
-- Should simulate spot interruptions for robustness testing
-- Add API version compatibility testing
+mutation RentSpotInstance($input: PodRentInterruptableInput!) {
+  podRentInterruptable(input: $input) {
+    id
+    status
+    machine {
+      podHostId
+    }
+  }
+}
 
-### Integration Tests
-- Test spot instance requests with real provider APIs (optional, with credentials)
-- Validate price comparison logic
-- Test interruption recovery scenarios
-- Test API version change handling
+mutation TerminatePod($input: PodTerminateInput!) {
+  podTerminate(input: $input) {
+    id
+  }
+}
 
-### Monitoring in Production
-- Track API response times and error rates
-- Monitor for API version changes
-- Alert on unexpected response schemas
-- Log deprecation warnings
+query GetPod($podId: String!) {
+  pod(input: { podId: $podId }) {
+    id
+    name
+    status
+    runtime {
+      uptimeInSeconds
+    }
+  }
+}
+```
 
-## Rate Limiting Considerations
+#### Generated Client Usage
 
-Each provider has different rate limits:
-- **Vast.ai**: 60 req/min
-- **Lambda Labs**: 1000 req/hour
-- **RunPod**: 100 req/min (GraphQL)
-- **Paperspace**: 200 req/min
+The GraphQL client is generated with type-safe methods:
 
-The operator should respect these limits when querying for spot availability and pricing updates.
+```go
+type Client struct {
+    *providers.BaseProvider
+    apiKey        string
+    graphqlClient graphql.Client
+}
 
-### Rate Limit Strategy:
-- Implement adaptive rate limiting based on provider responses
-- Use circuit breakers for failing providers
-- Cache responses appropriately to reduce API calls
-- Distribute requests across time to avoid bursts
+// Authentication wrapper
+type authHTTPClient struct {
+    client *http.Client
+    apiKey string
+}
+
+func (a *authHTTPClient) Do(req *http.Request) (*http.Response, error) {
+    req.Header.Set("Authorization", "Bearer "+a.apiKey)
+    return a.client.Do(req)
+}
+
+// Provider interface implementation using generated functions
+func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchRequest) (*providers.GPUInstance, error) {
+    input := PodRentInterruptableInput{
+        GpuTypeId:           req.GPUType,
+        Name:                fmt.Sprintf("tgp-%d", time.Now().Unix()),
+        ImageName:           "runpod/base:3.10-cuda11.8.0-devel-ubuntu22.04",
+        GpuCount:            1,
+        VolumeInGb:          20,
+    }
+
+    response, err := RentSpotInstance(ctx, c.graphqlClient, input) // Generated function
+    if err != nil {
+        return nil, fmt.Errorf("failed to launch RunPod spot instance: %w", err)
+    }
+
+    return &providers.GPUInstance{
+        ID:        response.PodRentInterruptable.Id,
+        Status:    c.mapRunPodStatusToProviderStatus(response.PodRentInterruptable.Status),
+        CreatedAt: time.Now(),
+    }, nil
+}
+```
+
+### Paperspace - OpenAPI Generated Client (Partial)
+
+**Implementation**: `pkg/providers/paperspace/`
+**API Type**: REST API with complex union types
+**Base URL**: `https://api.paperspace.com/v1`
+
+#### Implementation Challenge
+
+Paperspace API uses complex union types in create operations that complicate code generation:
+
+```json
+{
+  "machineType": {
+    "oneOf": [
+      { "type": "string", "enum": ["Air", "Standard", "Pro"] },
+      { "$ref": "#/components/schemas/MachineTypeConfig" }
+    ]
+  }
+}
+```
+
+#### Current Implementation
+
+The client uses generated types for read operations and simplified approach for create:
+
+```go
+type Client struct {
+    *providers.BaseProvider
+    apiKey    string
+    apiClient *api.ClientWithResponses  // Generated from OpenAPI
+}
+
+// Status and terminate use real API calls
+func (c *Client) GetInstanceStatus(ctx context.Context, instanceID string) (*providers.InstanceStatus, error) {
+    resp, err := c.apiClient.MachinesGetWithResponse(ctx, instanceID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get instance status: %w", err)
+    }
+
+    state := c.translateStatus(string(resp.JSON200.State))
+    return &providers.InstanceStatus{
+        State:     state,
+        Message:   c.getStatusMessage(string(resp.JSON200.State)),
+        UpdatedAt: time.Now(),
+    }, nil
+}
+
+// Launch uses simplified mock approach due to complex union types
+func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchRequest) (*providers.GPUInstance, error) {
+    // Enhanced mock implementation until union types are properly handled
+    return &providers.GPUInstance{
+        ID:        fmt.Sprintf("paperspace-real-%d", time.Now().Unix()),
+        Status:    providers.InstanceStatePending,
+        CreatedAt: time.Now(),
+    }, nil
+}
+```
+
+#### Authentication Pattern
+
+Paperspace uses Bearer token authentication:
+
+```go
+api.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
+    req.Header.Set("Authorization", "Bearer "+apiKey)
+    return nil
+})
+```
+
+## Code Generation Summary
+
+### Implementation Approaches
+
+| Provider    | API Type | Generation Tool | Client Pattern             | Status      |
+| ----------- | -------- | --------------- | -------------------------- | ----------- |
+| RunPod      | GraphQL  | genqlient       | Schema-based generation    | ✅ Complete |
+| Lambda Labs | REST     | oapi-codegen    | OpenAPI specification      | ✅ Complete |
+| Paperspace  | REST     | oapi-codegen    | Partial due to union types | 🔄 Partial  |
+
+### Generated Artifacts
+
+#### RunPod GraphQL
+
+- `pkg/providers/runpod/generated.go` - Generated types and functions
+- `pkg/providers/runpod/queries.graphql` - GraphQL operations
+- `pkg/providers/runpod/schema.graphql` - GraphQL schema
+
+#### Lambda Labs OpenAPI
+
+- `pkg/providers/lambdalabs/api/client.go` - Generated REST client
+- `pkg/providers/lambdalabs/api/types.go` - Generated type definitions
+
+#### Paperspace OpenAPI
+
+- `pkg/providers/paperspace/api/client.go` - Generated REST client (read operations)
+- `pkg/providers/paperspace/api/types.go` - Generated type definitions
+
+## Testing and Mocking Strategy
+
+### Test Implementation Pattern
+
+Provider clients implement conditional behavior for testing:
+
+```go
+const (
+    fakeAPIKey = "fake-api-key" // #nosec G101 -- Test constant
+)
+
+func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchRequest) (*providers.GPUInstance, error) {
+    if c.apiClient == nil || c.apiKey == fakeAPIKey {
+        // Return mock data for testing
+        return &providers.GPUInstance{
+            ID:        fmt.Sprintf("test-%d", time.Now().Unix()),
+            Status:    providers.InstanceStatePending,
+            CreatedAt: time.Now(),
+        }, nil
+    }
+
+    // Real API implementation
+    return c.callRealAPI(ctx, req)
+}
+```
+
+### Integration Testing
+
+Controllers can test with real provider APIs when credentials are available:
+
+```go
+func TestGPUNodePoolController(t *testing.T) {
+    // Use real API key if available in environment
+    apiKey := os.Getenv("RUNPOD_API_KEY")
+    if apiKey == "" {
+        apiKey = "fake-api-key" // Falls back to mock behavior
+    }
+
+    client := runpod.NewClient(apiKey)
+    // Test with either real or mock behavior
+}
+```
+
+## Summary
+
+The TGP operator's provider integration architecture uses:
+
+1. **Declarative Configuration**: `GPUNodeClass` CRDs define provider settings
+2. **Code Generation**: OpenAPI and GraphQL tools generate type-safe clients
+3. **Standardized Interface**: Common `ProviderClient` interface abstracts provider differences
+4. **Resilience Patterns**: Circuit breakers, retries, and error classification
+5. **Testing Strategy**: Conditional mock behavior enables both unit and integration testing
+
+This architecture provides a scalable foundation for adding new providers while maintaining type safety and operational reliability. The focus on code generation ensures that API changes are caught at compile time and that client implementations remain consistent with provider specifications.
+
+## Error Handling and Resilience
+
+### Provider Error Classification
+
+Provider clients implement standardized error handling:
+
+```go
+// Common error patterns across providers
+func (c *Client) classifyError(err error) ErrorType {
+    errMsg := strings.ToLower(err.Error())
+
+    // Billing/credit errors
+    if strings.Contains(errMsg, "credit") || strings.Contains(errMsg, "billing") {
+        return BillingError
+    }
+
+    // Rate limiting
+    if strings.Contains(errMsg, "rate limit") || strings.Contains(errMsg, "429") {
+        return RateLimitError
+    }
+
+    // Resource availability
+    if strings.Contains(errMsg, "capacity") || strings.Contains(errMsg, "unavailable") {
+        return AvailabilityError
+    }
+
+    return UnknownError
+}
+```
+
+### Retry and Circuit Breaker Patterns
+
+The `BaseProvider` implements common resilience patterns:
+
+```go
+type BaseProvider struct {
+    info        *ProviderInfo
+    rateLimits  *RateLimitInfo
+    circuitBreaker *CircuitBreaker
+    retryPolicy    *RetryPolicy
+}
+
+func (b *BaseProvider) ExecuteWithRetry(ctx context.Context, operation func() error) error {
+    return b.retryPolicy.Execute(ctx, func() error {
+        if b.circuitBreaker.State() == CircuitOpen {
+            return ErrCircuitOpen
+        }
+
+        err := operation()
+        if err != nil {
+            b.circuitBreaker.RecordFailure()
+            return err
+        }
+
+        b.circuitBreaker.RecordSuccess()
+        return nil
+    })
+}
+```
+
+## Credential Management
+
+### Secret Resolution Flow
+
+Controllers resolve provider credentials through Kubernetes secrets:
+
+```go
+func (r *GPUNodeClassReconciler) getProviderCredentials(ctx context.Context, ref *v1.SecretReference) (string, error) {
+    namespace := ref.Namespace
+    if namespace == "" {
+        namespace = r.DefaultNamespace
+    }
+
+    secret := &corev1.Secret{}
+    key := client.ObjectKey{Name: ref.Name, Namespace: namespace}
+
+    if err := r.Get(ctx, key, secret); err != nil {
+        return "", fmt.Errorf("failed to get credential secret %s/%s: %w", namespace, ref.Name, err)
+    }
+
+    credential, exists := secret.Data[ref.Key]
+    if !exists {
+        return "", fmt.Errorf("credential key %s not found in secret %s/%s", ref.Key, namespace, ref.Name)
+    }
+
+    return string(credential), nil
+}
+```
+
+### Provider Factory Pattern
+
+Controllers use a factory to instantiate provider clients:
+
+```go
+func (r *GPUNodeClassReconciler) createProviderClient(providerName, credential string) (providers.ProviderClient, error) {
+    switch providerName {
+    case "runpod":
+        return runpod.NewClient(credential), nil
+    case "lambdalabs":
+        return lambdalabs.NewClient(credential), nil
+    case "paperspace":
+        return paperspace.NewClient(credential), nil
+    default:
+        return nil, fmt.Errorf("unsupported provider: %s", providerName)
+    }
+}
+```

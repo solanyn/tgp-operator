@@ -39,25 +39,6 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        # Legacy environment variables for backwards compatibility
-        - name: RUNPOD_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: {{ .Values.providers.runpod.secretName }}
-              key: {{ .Values.providers.runpod.secretKey }}
-              optional: true
-        - name: LAMBDA_LABS_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: {{ .Values.providers.lambdaLabs.secretName }}
-              key: {{ .Values.providers.lambdaLabs.secretKey }}
-              optional: true
-        - name: PAPERSPACE_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: {{ .Values.providers.paperspace.secretName }}
-              key: {{ .Values.providers.paperspace.secretKey }}
-              optional: true
         ports:
         - containerPort: {{ .Values.metrics.port }}
           name: metrics

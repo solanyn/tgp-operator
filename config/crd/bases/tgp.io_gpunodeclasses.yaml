@@ -1,0 +1,353 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: gpunodeclasses.tgp.io
+spec:
+  group: tgp.io
+  names:
+    kind: GPUNodeClass
+    listKind: GPUNodeClassList
+    plural: gpunodeclasses
+    singular: gpunodeclass
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: GPUNodeClass defines infrastructure templates for GPU node provisioning
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: GPUNodeClassSpec defines the desired state of GPUNodeClass
+            properties:
+              instanceRequirements:
+                description: InstanceRequirements defines the instance constraints
+                properties:
+                  gpuTypes:
+                    description: GPUTypes lists the allowed GPU types
+                    items:
+                      type: string
+                    type: array
+                  minGPUMemoryGiB:
+                    description: MinGPUMemoryGiB specifies the minimum GPU memory
+                      in GiB
+                    format: int32
+                    type: integer
+                  minMemoryGiB:
+                    description: MinMemoryGiB specifies the minimum memory in GiB
+                    format: int32
+                    type: integer
+                  minVCPU:
+                    description: MinVCPU specifies the minimum number of vCPUs
+                    format: int32
+                    type: integer
+                  regions:
+                    description: Regions lists the preferred regions
+                    items:
+                      type: string
+                    type: array
+                  spotAllowed:
+                    description: SpotAllowed indicates whether spot instances are
+                      allowed
+                    type: boolean
+                type: object
+              limits:
+                description: Limits defines resource and cost limits for this node
+                  class
+                properties:
+                  maxHourlyCost:
+                    description: MaxHourlyCost is the maximum total hourly cost for
+                      all nodes from this class
+                    type: string
+                  maxNodes:
+                    description: MaxNodes is the maximum number of nodes that can
+                      be created from this class
+                    format: int32
+                    type: integer
+                  resources:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: Resources defines resource limits for this node class
+                    type: object
+                type: object
+              providers:
+                description: Providers defines the cloud providers and their configuration
+                items:
+                  description: ProviderConfig defines configuration for a cloud provider
+                  properties:
+                    credentialsRef:
+                      description: CredentialsRef references the secret containing
+                        provider credentials
+                      properties:
+                        key:
+                          description: Key is the key within the secret
+                          type: string
+                        name:
+                          description: Name is the name of the secret
+                          type: string
+                        namespace:
+                          description: Namespace is the namespace of the secret (optional,
+                            defaults to current namespace)
+                          type: string
+                      required:
+                      - key
+                      - name
+                      type: object
+                    enabled:
+                      description: Enabled indicates whether this provider is available
+                        for use
+                      type: boolean
+                    name:
+                      description: Name of the provider (runpod, paperspace, lambdalabs)
+                      type: string
+                    priority:
+                      description: Priority for provider selection (lower numbers
+                        = higher priority)
+                      format: int32
+                      type: integer
+                    regions:
+                      description: Regions specifies the allowed regions for this
+                        provider
+                      items:
+                        type: string
+                      type: array
+                  required:
+                  - credentialsRef
+                  - name
+                  type: object
+                type: array
+              tags:
+                additionalProperties:
+                  type: string
+                description: Tags are propagated to all instances created from this
+                  node class
+                type: object
+              tailscaleConfig:
+                description: TailscaleConfig contains default Tailscale networking
+                  configuration
+                properties:
+                  acceptRoutes:
+                    description: |-
+                      AcceptRoutes indicates whether to accept routes from other devices in the tailnet
+                      Default: true
+                    type: boolean
+                  advertiseRoutes:
+                    description: AdvertiseRoutes specifies subnet routes to advertise
+                      (for gateway nodes)
+                    items:
+                      type: string
+                    type: array
+                  authKeySecretRef:
+                    description: |-
+                      AuthKeySecretRef references a secret containing the Tailscale auth key
+                      Deprecated: Use OAuthCredentialsSecretRef for better security and automatic key management
+                    properties:
+                      key:
+                        description: Key is the key within the secret
+                        type: string
+                      name:
+                        description: Name is the name of the secret
+                        type: string
+                      namespace:
+                        description: Namespace is the namespace of the secret (optional,
+                          defaults to current namespace)
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  ephemeral:
+                    description: |-
+                      Ephemeral indicates whether the device should be ephemeral (cleanup on deletion)
+                      Default: true
+                    type: boolean
+                  hostname:
+                    description: Hostname for the Tailscale device (optional, defaults
+                      to generated name)
+                    type: string
+                  oauthCredentialsSecretRef:
+                    description: |-
+                      OAuthCredentialsSecretRef references a secret containing Tailscale OAuth credentials
+                      The operator will use these to dynamically generate auth keys as needed
+                      Secret should contain 'client-id' and 'client-secret' keys
+                    properties:
+                      clientIdKey:
+                        description: ClientIDKey is the key containing the OAuth client
+                          ID (defaults to "client-id")
+                        type: string
+                      clientSecretKey:
+                        description: ClientSecretKey is the key containing the OAuth
+                          client secret (defaults to "client-secret")
+                        type: string
+                      name:
+                        description: Name is the name of the secret containing OAuth
+                          credentials
+                        type: string
+                      namespace:
+                        description: Namespace is the namespace of the secret (optional,
+                          defaults to current namespace)
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  operatorConfig:
+                    description: OperatorConfig contains Tailscale Operator integration
+                      settings
+                    properties:
+                      connectorEnabled:
+                        description: |-
+                          ConnectorEnabled indicates whether to create a Tailscale Connector CRD
+                          Default: true
+                        type: boolean
+                      connectorSpec:
+                        description: ConnectorSpec allows customization of the Connector
+                          CRD
+                        properties:
+                          appConnector:
+                            description: AppConnector configures the node as an app
+                              connector
+                            type: boolean
+                          exitNode:
+                            description: ExitNode configures the node as an exit node
+                            type: boolean
+                          subnetRouter:
+                            description: SubnetRouter configures the node as a subnet
+                              router
+                            properties:
+                              advertiseRoutes:
+                                description: AdvertiseRoutes specifies the subnet
+                                  routes to advertise
+                                items:
+                                  type: string
+                                type: array
+                            required:
+                            - advertiseRoutes
+                            type: object
+                        type: object
+                    type: object
+                  tags:
+                    description: |-
+                      Tags to apply to the device for ACL targeting
+                      Default: ["tag:k8s"]
+                    items:
+                      type: string
+                    type: array
+                type: object
+              talosConfig:
+                description: TalosConfig contains default Talos OS configuration
+                properties:
+                  image:
+                    description: Image specifies the Talos image to use
+                    type: string
+                  kubeletImage:
+                    description: KubeletImage specifies the kubelet image to use (defaults
+                      to GPU-optimized image)
+                    type: string
+                  machineConfigTemplate:
+                    description: MachineConfigTemplate contains template for Talos
+                      machine configuration
+                    type: string
+                required:
+                - image
+                type: object
+            required:
+            - providers
+            type: object
+          status:
+            description: GPUNodeClassStatus defines the observed state of GPUNodeClass
+            properties:
+              activeNodes:
+                description: ActiveNodes is the number of nodes currently active from
+                  this class
+                format: int32
+                type: integer
+              conditions:
+                description: Conditions represent the latest available observations
+                  of the node class's state
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              totalCost:
+                description: TotalCost is the current hourly cost of all active nodes
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

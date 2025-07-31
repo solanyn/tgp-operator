@@ -5,10 +5,15 @@ vars:
   OUTPUT_DIR: dist/chart
 tasks:
   crd:
-    desc: Sync generated CRD to Helm chart
+    desc: Sync generated CRDs to Helm chart
     cmds:
       - task: :dev:generate
-      - cp config/crd/bases/tgp.io_gpurequests.yaml {{.CHART_DIR}}/templates/crd.yaml
+      - |
+        # Combine all CRDs into one file for the chart
+        echo "---" > {{.CHART_DIR}}/templates/crd.yaml
+        cat config/crd/bases/tgp.io_gpunodeclasses.yaml >> {{.CHART_DIR}}/templates/crd.yaml
+        echo "---" >> {{.CHART_DIR}}/templates/crd.yaml
+        cat config/crd/bases/tgp.io_gpunodepools.yaml >> {{.CHART_DIR}}/templates/crd.yaml
   template:
     desc: Generate Helm templates for testing
     deps: [crd]
