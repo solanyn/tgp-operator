@@ -240,7 +240,6 @@ The task runner is aligned with our CI/CD workflows for consistency between loca
 - `task test:unit` - Run unit tests
 - `task test:integration` - Run all integration tests (envtest + Talos Docker)
 - `task test:validate-providers` - Validate cloud provider credentials (no instance launches)
-- `task test:e2e` - Run true e2e tests against real cloud providers
 - `task test:all` - Run all safe tests (unit + integration)
 
 #### Provider Testing
@@ -350,10 +349,8 @@ task test:all                    # Unit + integration tests
 
 # Manual testing with real APIs
 task test:validate-providers     # Test API connectivity (no instance launches)
-task test:e2e                   # Manual E2E workflow with real providers
 
 # Automated E2E testing (advanced)
-task test:e2e-automated          # Fully automated E2E with infrastructure provisioning
 ```
 
 > **⚠️ Important**: E2E tests require:
@@ -383,19 +380,6 @@ For full E2E testing, you need:
    - WireGuard server accessible from cloud provider networks
    - Proper firewall/routing configuration
 
-### Automated E2E Testing
-
-The `task test:e2e-automated` command fully automates the E2E testing process:
-
-```bash
-# Set up environment variables
-export RUNPOD_API_KEY="your_runpod_key"
-export LAMBDA_LABS_API_KEY="your_lambda_key"
-export HETZNER_API_TOKEN="your_hetzner_token"  # For WireGuard server
-
-# Run fully automated E2E testing
-task test:e2e-automated
-```
 
 **What it automates**:
 - WireGuard server deployment (cheap VPS)
@@ -424,16 +408,7 @@ The repository includes true E2E testing using GitHub Actions runners with real 
 - Automatic cleanup of all test resources
 - Manual trigger for cost control
 
-**Trigger E2E tests**:
-```bash
-# Test specific provider
-gh workflow run test-e2e.yml -f provider=runpod
-
-# Test all providers
-gh workflow run test-e2e.yml -f provider=all
-```
-
-**Scheduled**: Runs weekly on main branch to catch API changes
+**Note**: E2E testing workflow has been removed for now and will be revisited in the future with a simpler approach.
 
 ## Releases
 
@@ -522,10 +497,6 @@ Our CI/CD pipeline is structured into modular workflows that mirror local develo
    - Unit tests with coverage
    - Integration tests with envtest
 
-3. **test-e2e.yml** - End-to-end testing
-
-   - Mock provider tests with Docker-based Talos
-   - Real provider tests (main branch only, requires secrets)
 
 4. **security-scan.yml** - Security analysis
 
@@ -554,7 +525,6 @@ Tasks are designed to match CI workflows:
 
 - `task lint` = lint.yml
 - `task test` = test-go.yml
-- `task test:e2e` = test-e2e.yml
 - `task security` = security-scan.yml
 - `task docker:build` = build-and-push-images.yml
 - `task ci:local` = ci.yml behavior
