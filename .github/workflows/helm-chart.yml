@@ -4,8 +4,6 @@ on:
   push:
     branches: [main]
     paths: [chart/**, .github/workflows/helm-chart.yml]
-  release:
-    types: [published]
 permissions:
   contents: read
 jobs:
@@ -32,7 +30,7 @@ jobs:
   package-and-push:
     needs: lint-and-test
     runs-on: ubuntu-latest
-    if: github.event_name == 'release'
+    if: false  # Disabled - now handled in build-and-push-images.yml
     permissions:
       contents: read
       packages: write
