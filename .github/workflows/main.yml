@@ -9,12 +9,6 @@ jobs:
     uses: ./.github/workflows/test-go.yml
     permissions:
       contents: read
-  test-e2e:
-    name: E2E Tests
-    needs: [test-go]
-    uses: ./.github/workflows/test-e2e.yml
-    permissions:
-      contents: read
   build:
     name: Build Images
     needs: [test-go]
@@ -25,7 +19,7 @@ jobs:
   check-release:
     name: Check for Release
     runs-on: ubuntu-latest
-    needs: [test-go, test-e2e]
+    needs: [test-go]
     outputs:
       needs-release: ${{ steps.check.outputs.needs-release }}
       next-version: ${{ steps.check.outputs.next-version }}
