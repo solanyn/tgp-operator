@@ -14,5 +14,5 @@ jobs:
     needs: [test-go]
     uses: ./.github/workflows/build-and-push-images.yml
     permissions:
-      contents: read
+      contents: write
       packages: write
