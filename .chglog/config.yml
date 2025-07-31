@@ -7,13 +7,19 @@ info:
 options:
   commits:
     filters:
-      Type: [feat, fix, perf, refactor]
+      Type: [feat, fix, perf, refactor, docs, chore, test, ci, build, style]
   commit_groups:
     title_maps:
       feat: Features
       fix: Bug Fixes
       perf: Performance Improvements
       refactor: Code Refactoring
+      docs: Documentation
+      chore: Maintenance
+      test: Tests
+      ci: CI/CD
+      build: Build System
+      style: Code Style
   header:
     pattern: ^(\w*)(?:\(([\w\$\.\-\*\s]*)\))?\:\s(.*)$
     pattern_maps: [Type, Scope, Subject]

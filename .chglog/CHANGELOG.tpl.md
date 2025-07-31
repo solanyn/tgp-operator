@@ -10,7 +10,7 @@
 ### {{ .Title }}
 
 {{ range .Commits -}}
-* {{ if .Scope }}**{{ .Scope }}:** {{ end }}{{ .Subject }}
+* {{ if .Scope }}**{{ .Scope }}:** {{ end }}{{ .Subject }} ([{{ .Hash.Short }}]({{ $.Info.RepositoryURL }}/commit/{{ .Hash.Long }})){{ if .Author }} by @{{ .Author.Name }}{{ end }}
 {{ end }}
 
 {{ end -}}
@@ -35,7 +35,7 @@
 {{- if .NoteGroups -}}
 {{ range .NoteGroups -}}
 
-### Changes
+### Breaking Changes
 
 {{ range .Notes }}
 {{ .Body }}
