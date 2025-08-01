@@ -30,7 +30,7 @@ jobs:
   package-and-push:
     needs: lint-and-test
     runs-on: ubuntu-latest
-    if: false  # Disabled - now handled in build-and-push-images.yml
+    if: false
     permissions:
       contents: read
       packages: write
