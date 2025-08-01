@@ -101,9 +101,10 @@ jobs:
       - name: Package and push Helm chart
         run: |
           helm package chart/
-          helm push tgp-operator-${{ steps.version.outputs.chart_version }}.tgz oci://ghcr.io/solanyn/charts > push-metadata.txt
-          CHART_DIGEST=$(awk '/Digest: /{print $2}' push-metadata.txt)
+          helm push tgp-operator-${{ steps.version.outputs.chart_version }}.tgz oci://ghcr.io/solanyn/charts 2>&1 | tee push-metadata.txt
+          CHART_DIGEST=$(grep -o 'sha256:[a-f0-9]\{64\}' push-metadata.txt)
           echo "chart_digest=${CHART_DIGEST}" >> $GITHUB_OUTPUT
+          echo "Chart digest: ${CHART_DIGEST}"
         id: push
       - name: Sign Helm chart with Cosign
         run: |
