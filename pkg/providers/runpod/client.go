@@ -41,7 +41,6 @@ func NewClient(apiKey string) *Client {
 		Name:                  "runpod",
 		APIVersion:            "v1",
 		SupportedRegions:      []string{providers.RegionUSEast, providers.RegionUSWest},
-		SupportedGPUTypes:     []string{providers.GPUTypeRTX4090, providers.GPUTypeH100, providers.GPUTypeA100},
 		SupportsSpotInstances: true,
 		BillingGranularity:    providers.BillingPerSecond,
 	}

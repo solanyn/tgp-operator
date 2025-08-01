@@ -41,7 +41,13 @@ func NewClient(apiKey string) *Client {
 }
 
 func (c *Client) GetProviderInfo() *providers.ProviderInfo {
-	return &providers.ProviderInfo{Name: "lambda-labs"}
+	return &providers.ProviderInfo{
+		Name:                  "lambda-labs",
+		APIVersion:            "v1",
+		SupportedRegions:      []string{providers.RegionUSEast, providers.RegionUSWest, providers.RegionEUCentral},
+		SupportsSpotInstances: false,
+		BillingGranularity:    providers.BillingPerSecond,
+	}
 }
 
 func (c *Client) GetRateLimits() *providers.RateLimitInfo {

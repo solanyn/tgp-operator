@@ -37,7 +37,7 @@ func NewClient(apiKey string) *Client {
 		Name:                  "paperspace",
 		APIVersion:            "v1",
 		SupportedRegions:      []string{providers.RegionUSEast, providers.RegionUSWest},
-		SupportedGPUTypes:     []string{"RTX4000", "RTX5000", "A100", "V100", "P4000", "P5000", "P6000"},
+		SupportedGPUTypes:     []string{"P4000", "P5000", "P6000", "V100", "RTX4000", "RTX5000", "A100"},
 		SupportsSpotInstances: false,
 		BillingGranularity:    providers.BillingPerHour,
 	}
@@ -67,7 +67,32 @@ func NewClient(apiKey string) *Client {
 }
 
 func (c *Client) TranslateGPUType(standard string) (string, error) {
-	return standard, nil
+	// Check if the provided type is already a valid Paperspace machine type
+	supportedTypes := []string{"P4000", "P5000", "P6000", "V100", "RTX4000", "RTX5000", "A100"}
+	
+	for _, supported := range supportedTypes {
+		if strings.EqualFold(standard, supported) {
+			return supported, nil
+		}
+	}
+
+	// If not a direct match, try to map common GPU names to Paperspace equivalents  
+	switch strings.ToUpper(standard) {
+	case "RTX4090", "RTX4080", "RTX4070":
+		return "RTX4000", nil // RTX 4000 is closest available
+	case "RTX3090", "RTX3080":
+		return "RTX5000", nil // RTX 5000 for high-end RTX 30 series
+	case "RTX3070", "RTX3060":
+		return "RTX4000", nil // RTX 4000 for mid-range RTX 30 series
+	case "QUADROP4000", "P4000":
+		return "P4000", nil
+	case "QUADROP5000", "P5000":
+		return "P5000", nil
+	case "QUADROP6000", "P6000":
+		return "P6000", nil
+	default:
+		return "", fmt.Errorf("unsupported GPU type '%s' for Paperspace. Supported types: %v", standard, supportedTypes)
+	}
 }
 
 func (c *Client) TranslateRegion(standard string) (string, error) {
@@ -93,78 +118,83 @@ func (c *Client) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFi
 		}, nil
 	}
 
-	// For now, return static machine types that are commonly available on Paperspace
-	// In a real implementation, we'd need to use a different API endpoint to get available machine types
-	// The /machines endpoint only lists user's existing machines, not available machine types
-	staticOffers := []providers.GPUOffer{
-		{
-			ID:          "paperspace-C5",
-			Provider:    "paperspace",
-			GPUType:     "NVIDIA RTX 4000",
-			Region:      "us-west",
-			HourlyPrice: 0.51,
-			Memory:      32,
-			Storage:     250,
-			Available:   true,
-			IsSpot:      false,
-			SpotPrice:   0,
-		},
-		{
-			ID:          "paperspace-C6",
-			Provider:    "paperspace",
-			GPUType:     "NVIDIA RTX 5000",
-			Region:      "us-west",
-			HourlyPrice: 0.82,
-			Memory:      32,
-			Storage:     250,
-			Available:   true,
-			IsSpot:      false,
-			SpotPrice:   0,
-		},
-		{
-			ID:          "paperspace-C7",
-			Provider:    "paperspace",
-			GPUType:     "NVIDIA RTX A6000",
-			Region:      "us-west",
-			HourlyPrice: 1.89,
-			Memory:      45,
-			Storage:     250,
-			Available:   true,
-			IsSpot:      false,
-			SpotPrice:   0,
-		},
-		{
-			ID:          "paperspace-C8",
-			Provider:    "paperspace",
-			GPUType:     "NVIDIA A100",
-			Region:      "us-west",
-			HourlyPrice: 3.09,
-			Memory:      45,
-			Storage:     250,
-			Available:   true,
-			IsSpot:      false,
-			SpotPrice:   0,
-		},
+	// Get available machine types from Paperspace templates API
+	resp, err := c.apiClient.OsTemplatesListWithResponse(ctx, &api.OsTemplatesListParams{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list OS templates: %w", err)
 	}
 
-	// Apply filters if provided
+	if resp.JSON200 == nil {
+		return nil, fmt.Errorf("unexpected response from Paperspace API: %s", resp.Status())
+	}
+
+	// Extract unique machine types from all templates
+	machineTypeMap := make(map[string]bool)
+	for _, template := range resp.JSON200.Items {
+		for _, machineType := range template.AvailableMachineTypes {
+			machineTypeMap[machineType.MachineTypeLabel] = true
+		}
+	}
+
+	// Convert to GPU offers
 	var offers []providers.GPUOffer
-	for _, offer := range staticOffers {
-		if filters != nil {
-			if filters.GPUType != "" && !c.matchesGPUType(offer.GPUType, filters.GPUType) {
-				continue
-			}
-			if filters.Region != "" && offer.Region != filters.Region {
-				continue
-			}
-			if filters.MaxPrice > 0 && offer.HourlyPrice > filters.MaxPrice {
-				continue
-			}
+	for machineType := range machineTypeMap {
+		// Skip non-GPU machine types (Paperspace has CPU-only types too)
+		if !c.isGPUMachineType(machineType) {
+			continue
+		}
+
+		offer := providers.GPUOffer{
+			ID:          fmt.Sprintf("paperspace-%s", machineType),
+			Provider:    "paperspace",
+			GPUType:     machineType,
+			Region:      providers.RegionUSEast, // Paperspace regions are complex, simplify for now
+			HourlyPrice: c.getHourlyPrice(machineType),
+			Memory:      c.getGPUMemory(machineType),
+			Storage:     250, // Default storage
+			Available:   true, // Assume available if in templates
+			IsSpot:      false,
+			SpotPrice:   0,
 		}
 		offers = append(offers, offer)
 	}
 
 	return offers, nil
+}
+
+// isGPUMachineType checks if a machine type has GPU capabilities
+func (c *Client) isGPUMachineType(machineType string) bool {
+	gpuTypes := []string{"P4000", "P5000", "P6000", "V100", "RTX4000", "RTX5000", "A100", "RTX6000"}
+	for _, gpuType := range gpuTypes {
+		if strings.Contains(strings.ToUpper(machineType), strings.ToUpper(gpuType)) {
+			return true
+		}
+	}
+	return false
+}
+
+// getGPUMemory returns estimated GPU memory for a machine type
+func (c *Client) getGPUMemory(machineType string) int64 {
+	switch {
+	case strings.Contains(strings.ToLower(machineType), "a100"):
+		return 40 // A100 has 40GB
+	case strings.Contains(strings.ToLower(machineType), "v100"):
+		return 32 // V100 has 32GB  
+	case strings.Contains(strings.ToLower(machineType), "rtx6000"):
+		return 24 // RTX 6000 has 24GB
+	case strings.Contains(strings.ToLower(machineType), "rtx5000"):
+		return 16 // RTX 5000 has 16GB
+	case strings.Contains(strings.ToLower(machineType), "rtx4000"):
+		return 8 // RTX 4000 has 8GB
+	case strings.Contains(strings.ToLower(machineType), "p6000"):
+		return 24 // P6000 has 24GB
+	case strings.Contains(strings.ToLower(machineType), "p5000"):
+		return 16 // P5000 has 16GB
+	case strings.Contains(strings.ToLower(machineType), "p4000"):
+		return 8 // P4000 has 8GB
+	default:
+		return 8 // Default
+	}
 }
 
 func (c *Client) ListOffers(ctx context.Context, gpuType, region string) ([]providers.GPUOffer, error) {
@@ -177,10 +207,17 @@ func (c *Client) ListOffers(ctx context.Context, gpuType, region string) ([]prov
 }
 
 func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchRequest) (*providers.GPUInstance, error) {
+	// Translate standard GPU type to Paperspace machine type
+	paperspaceGPUType, err := c.TranslateGPUType(req.GPUType)
+	if err != nil {
+		// Log warning but continue with translated type
+		fmt.Printf("Warning: %v\n", err)
+	}
+
 	if c.apiClient == nil || c.apiKey == fakeAPIKey {
 		// Return mock data when API client is not initialized (for testing)
 		return &providers.GPUInstance{
-			ID:        fmt.Sprintf("paperspace-%d", time.Now().Unix()),
+			ID:        fmt.Sprintf("paperspace-%s-%d", paperspaceGPUType, time.Now().Unix()),
 			Status:    providers.InstanceStatePending,
 			PublicIP:  "",
 			CreatedAt: time.Now(),
@@ -190,8 +227,12 @@ func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchReques
 	// For now, return a proper implementation using the simplified approach
 	// The complex union types in Paperspace API make this challenging
 	// We'll use the API for status and terminate, but return mock for launch until we can handle the union types properly
+	
+	// TODO: Implement actual Paperspace API call using paperspaceGPUType
+	// This would involve creating the machine with the translated GPU type
+	
 	return &providers.GPUInstance{
-		ID:        fmt.Sprintf("paperspace-real-%d", time.Now().Unix()),
+		ID:        fmt.Sprintf("paperspace-real-%s-%d", paperspaceGPUType, time.Now().Unix()),
 		Status:    providers.InstanceStatePending,
 		PublicIP:  "",
 		CreatedAt: time.Now(),

@@ -284,6 +284,54 @@ spec:
                   this class
                 format: int32
                 type: integer
+              availableGPUs:
+                additionalProperties:
+                  items:
+                    description: GPUAvailability represents available GPU instances
+                      from a provider
+                    properties:
+                      available:
+                        description: Available indicates if instances can be launched
+                        type: boolean
+                      availableCount:
+                        description: AvailableCount is the number of instances available
+                          (if known)
+                        format: int32
+                        type: integer
+                      gpuType:
+                        description: GPUType is the GPU model (e.g., "RTX4090", "A100")
+                        type: string
+                      lastUpdated:
+                        description: LastUpdated is when this data was retrieved
+                        format: date-time
+                        type: string
+                      memory:
+                        description: Memory is GPU memory in GB
+                        format: int64
+                        type: integer
+                      pricePerHour:
+                        description: PricePerHour is the hourly cost in USD (as string
+                          to avoid float precision issues)
+                        type: string
+                      regions:
+                        description: Regions where this GPU type is available
+                        items:
+                          type: string
+                        type: array
+                      spotPrice:
+                        description: SpotPrice is the spot instance price if available
+                          (as string to avoid float precision issues)
+                        type: string
+                    required:
+                    - available
+                    - gpuType
+                    - lastUpdated
+                    - pricePerHour
+                    type: object
+                  type: array
+                description: AvailableGPUs shows current GPU availability from all
+                  enabled providers
+                type: object
               conditions:
                 description: Conditions represent the latest available observations
                   of the node class's state
@@ -342,6 +390,11 @@ spec:
                   - type
                   type: object
                 type: array
+              lastInventoryUpdate:
+                description: LastInventoryUpdate is when the GPU availability was
+                  last refreshed
+                format: date-time
+                type: string
               totalCost:
                 description: TotalCost is the current hourly cost of all active nodes
                 type: string

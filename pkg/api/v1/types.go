@@ -71,6 +71,43 @@ type GPUNodeClassStatus struct {
 	// TotalCost is the current hourly cost of all active nodes
 	// +optional
 	TotalCost string `json:"totalCost,omitempty"`
+
+	// AvailableGPUs shows current GPU availability from all enabled providers
+	// +optional
+	AvailableGPUs map[string][]GPUAvailability `json:"availableGPUs,omitempty"`
+
+	// LastInventoryUpdate is when the GPU availability was last refreshed
+	// +optional
+	LastInventoryUpdate *metav1.Time `json:"lastInventoryUpdate,omitempty"`
+}
+
+// GPUAvailability represents available GPU instances from a provider
+type GPUAvailability struct {
+	// GPUType is the GPU model (e.g., "RTX4090", "A100")
+	GPUType string `json:"gpuType"`
+
+	// Regions where this GPU type is available
+	Regions []string `json:"regions,omitempty"`
+
+	// PricePerHour is the hourly cost in USD (as string to avoid float precision issues)
+	PricePerHour string `json:"pricePerHour"`
+
+	// Memory is GPU memory in GB
+	Memory int64 `json:"memory,omitempty"`
+
+	// Available indicates if instances can be launched
+	Available bool `json:"available"`
+
+	// AvailableCount is the number of instances available (if known)
+	// +optional
+	AvailableCount *int32 `json:"availableCount,omitempty"`
+
+	// SpotPrice is the spot instance price if available (as string to avoid float precision issues)
+	// +optional
+	SpotPrice *string `json:"spotPrice,omitempty"`
+
+	// LastUpdated is when this data was retrieved
+	LastUpdated metav1.Time `json:"lastUpdated"`
 }
 
 // GPUNodePool defines provisioning pools that reference GPUNodeClass templates
