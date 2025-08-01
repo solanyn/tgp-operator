@@ -7,13 +7,13 @@ metadata:
     {{- include "tgp-operator.labels" . | nindent 4 }}
 rules:
 - apiGroups: ["tgp.io"]
-  resources: ["gpurequests"]
+  resources: ["gpunodeclasses", "gpunodepools"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 - apiGroups: ["tgp.io"]
-  resources: ["gpurequests/status"]
+  resources: ["gpunodeclasses/status", "gpunodepools/status"]
   verbs: ["get", "update", "patch"]
 - apiGroups: ["tgp.io"]
-  resources: ["gpurequests/finalizers"]
+  resources: ["gpunodeclasses/finalizers", "gpunodepools/finalizers"]
   verbs: ["update"]
 - apiGroups: [""]
   resources: ["nodes"]
