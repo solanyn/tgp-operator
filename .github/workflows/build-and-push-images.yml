@@ -3,6 +3,7 @@ name: Build and Push Images
 on:
   push:
     tags: [v*]
+    branches: [main]
   workflow_call:
     inputs:
       push:
