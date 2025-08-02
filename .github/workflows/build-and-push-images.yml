@@ -98,6 +98,7 @@ jobs:
         run: |
           sed -i "s/version: .*/version: ${{ steps.version.outputs.chart_version }}/" chart/Chart.yaml
           sed -i "s/appVersion: .*/appVersion: \"${{ steps.version.outputs.app_version }}\"/" chart/Chart.yaml
+          sed -i "s/tag: .*/tag: ${{ steps.version.outputs.app_version }}/" chart/values.yaml
       - name: Lint chart
         run: |
           helm lint chart/
