@@ -2,9 +2,12 @@
 package controllers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
+	"text/template"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -503,21 +506,312 @@ func (r *GPUNodePoolReconciler) createLaunchRequest(nodePool *tgpv1.GPUNodePool,
 	}, nil
 }
 
-// buildUserDataScript creates the initialization script for new nodes
+// buildUserDataScript creates provider-specific initialization data for new nodes
 func (r *GPUNodePoolReconciler) buildUserDataScript(nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass) (string, error) {
-	// TODO: Build proper Talos/cloud-init script
-	// This would include:
-	// - Talos OS configuration
-	// - Tailscale setup if configured
-	// - GPU driver installation
-	// - Kubernetes node registration
+	// Generate Talos machine configuration
+	machineConfig, err := r.generateTalosMachineConfig(nodePool, nodeClass)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate Talos machine config: %w", err)
+	}
 
-	script := `#!/bin/bash
-# TGP Operator Node Initialization Script
-echo "Initializing GPU node for pool: ` + nodePool.Name + `"
-# TODO: Add actual initialization logic
-`
-	return script, nil
+	return machineConfig, nil
+}
+
+// generateTalosMachineConfig creates a Talos machine configuration for the node
+func (r *GPUNodePoolReconciler) generateTalosMachineConfig(nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass) (string, error) {
+	// Get the machine config template
+	template := r.getMachineConfigTemplate(nodeClass)
+
+	// Create template variables for substitution
+	templateVars := r.buildTemplateVariables(nodePool, nodeClass)
+
+	// Apply template substitution
+	config, err := r.applyTemplate(template, templateVars)
+	if err != nil {
+		return "", fmt.Errorf("failed to apply machine config template: %w", err)
+	}
+
+	return config, nil
+}
+
+// getMachineConfigTemplate gets the Talos machine config template
+func (r *GPUNodePoolReconciler) getMachineConfigTemplate(nodeClass *tgpv1.GPUNodeClass) string {
+	// Use user-provided template if available
+	if nodeClass.Spec.TalosConfig != nil && nodeClass.Spec.TalosConfig.MachineConfigTemplate != "" {
+		return nodeClass.Spec.TalosConfig.MachineConfigTemplate
+	}
+
+	// Return sensible default template
+	return r.getDefaultMachineConfigTemplate()
+}
+
+// getDefaultMachineConfigTemplate returns a default Talos machine configuration template
+func (r *GPUNodePoolReconciler) getDefaultMachineConfigTemplate() string {
+	return `version: v1alpha1
+debug: false
+persist: true
+machine:
+  type: worker
+  token: {{.MachineToken}}
+  ca:
+    crt: {{.ClusterCA}}
+  certSANs: []
+  kubelet:
+    image: {{.KubeletImage}}
+    clusterDNS:
+      - 10.96.0.10
+    nodeIP:
+      validSubnets:
+        - 0.0.0.0/0
+    extraArgs:
+      {{- range $key, $value := .NodeLabels}}
+      node-labels: "{{$key}}={{$value}}"
+      {{- end}}
+    {{- if .NodeTaints}}
+    registerWithTaints:
+      {{- range .NodeTaints}}
+      - key: "{{.Key}}"
+        value: "{{.Value}}"
+        effect: "{{.Effect}}"
+      {{- end}}
+    {{- end}}
+  kernel:
+    modules:
+      - name: nvidia
+      - name: nvidia-uvm
+      - name: nvidia-drm
+      - name: nvidia-modeset
+  install:
+    disk: /dev/sda
+    image: {{.TalosImage}}
+    bootloader: true
+    wipe: false
+  features:
+    rbac: true
+    stableHostname: true
+  {{- if .TailscaleConfig}}
+  files:
+    - content: |
+        #!/bin/bash
+        # Install and configure Tailscale
+        curl -fsSL https://tailscale.com/install.sh | sh
+        
+        # Configure Tailscale with auth key
+        tailscale up --auth-key="{{.TailscaleAuthKey}}" --hostname="{{.TailscaleHostname}}" --advertise-tags="{{.TailscaleTags}}" {{.TailscaleFlags}}
+        
+        # Enable IP forwarding for subnet routing
+        echo 'net.ipv4.ip_forward = 1' >> /etc/sysctl.conf
+        echo 'net.ipv6.conf.all.forwarding = 1' >> /etc/sysctl.conf
+        sysctl -p
+      path: /opt/tgp/setup-tailscale.sh
+      permissions: 0755
+    - content: |
+        #!/bin/bash
+        # TGP Node Setup - GPU Operator will handle GPU drivers
+        echo "TGP node setup complete for pool: {{.NodePoolName}}"
+        
+        # Wait for kubelet to be ready, then remove startup taint
+        while ! kubectl --kubeconfig=/etc/kubernetes/kubelet.conf get nodes $(hostname) > /dev/null 2>&1; do
+          echo "Waiting for node to register..."
+          sleep 10
+        done
+        
+        # Remove startup taint once node is ready
+        kubectl --kubeconfig=/etc/kubernetes/kubelet.conf taint node $(hostname) node-initializing- || true
+        echo "Node initialization complete"
+      path: /opt/tgp/node-setup.sh
+      permissions: 0755
+  systemd:
+    units:
+      - name: tgp-tailscale-setup.service
+        enabled: true
+        contents: |
+          [Unit]
+          Description=TGP Tailscale Setup
+          After=network-online.target
+          Wants=network-online.target
+          
+          [Service]
+          Type=oneshot
+          ExecStart=/opt/tgp/setup-tailscale.sh
+          RemainAfterExit=true
+          
+          [Install]
+          WantedBy=multi-user.target
+      - name: tgp-node-setup.service
+        enabled: true
+        contents: |
+          [Unit]
+          Description=TGP Node Setup
+          After=kubelet.service tailscale.service
+          Wants=kubelet.service
+          
+          [Service]
+          Type=oneshot
+          ExecStart=/opt/tgp/node-setup.sh
+          RemainAfterExit=true
+          
+          [Install]
+          WantedBy=multi-user.target
+  {{- else}}
+  files:
+    - content: |
+        #!/bin/bash
+        # TGP Node Setup - GPU Operator will handle GPU drivers
+        echo "TGP node setup complete for pool: {{.NodePoolName}}"
+        
+        # Wait for kubelet to be ready, then remove startup taint
+        while ! kubectl --kubeconfig=/etc/kubernetes/kubelet.conf get nodes $(hostname) > /dev/null 2>&1; do
+          echo "Waiting for node to register..."
+          sleep 10
+        done
+        
+        # Remove startup taint once node is ready
+        kubectl --kubeconfig=/etc/kubernetes/kubelet.conf taint node $(hostname) node-initializing- || true
+        echo "Node initialization complete"
+      path: /opt/tgp/node-setup.sh
+      permissions: 0755
+  systemd:
+    units:
+      - name: tgp-node-setup.service
+        enabled: true
+        contents: |
+          [Unit]
+          Description=TGP Node Setup
+          After=kubelet.service
+          Wants=kubelet.service
+          
+          [Service]
+          Type=oneshot
+          ExecStart=/opt/tgp/node-setup.sh
+          RemainAfterExit=true
+          
+          [Install]
+          WantedBy=multi-user.target
+  {{- end}}
+cluster:
+  id: {{.ClusterID}}
+  secret: {{.ClusterSecret}}
+  controlPlane:
+    endpoint: {{.ControlPlaneEndpoint}}
+  clusterName: {{.ClusterName}}
+  network:
+    dnsDomain: cluster.local
+    podSubnets:
+      - 10.244.0.0/16
+    serviceSubnets:
+      - 10.96.0.0/12
+  proxy:
+    disabled: false
+  discovery:
+    enabled: true
+    registries:
+      kubernetes:
+        disabled: false
+        endpoint: {{.ControlPlaneEndpoint}}`
+}
+
+// buildTemplateVariables creates a map of variables for template substitution
+func (r *GPUNodePoolReconciler) buildTemplateVariables(nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass) map[string]interface{} {
+	talosDefaults := r.Config.Talos
+	tailscaleDefaults := r.Config.Tailscale
+
+	// Build node labels
+	nodeLabels := make(map[string]string)
+	if nodePool.Spec.Template.Metadata != nil && nodePool.Spec.Template.Metadata.Labels != nil {
+		for k, v := range nodePool.Spec.Template.Metadata.Labels {
+			nodeLabels[k] = v
+		}
+	}
+	// Add TGP-specific labels
+	nodeLabels["tgp.io/nodepool"] = nodePool.Name
+	nodeLabels["tgp.io/provisioned"] = "true"
+	nodeLabels["node.kubernetes.io/instance-type"] = "gpu"
+
+	// Build template variables
+	vars := map[string]interface{}{
+		// Talos cluster configuration
+		"MachineToken":         talosDefaults.MachineToken,
+		"ClusterCA":            talosDefaults.ClusterCA,
+		"ClusterID":            talosDefaults.ClusterID,
+		"ClusterSecret":        talosDefaults.ClusterSecret,
+		"ControlPlaneEndpoint": talosDefaults.ControlPlaneEndpoint,
+		"ClusterName":          talosDefaults.ClusterName,
+		"TalosImage":           talosDefaults.Image,
+		"KubeletImage":         getKubeletImage(nodeClass),
+
+		// Node configuration
+		"NodePoolName": nodePool.Name,
+		"NodeLabels":   nodeLabels,
+		"NodeTaints":   nodePool.Spec.Template.Spec.Taints,
+
+		// Conditional Tailscale configuration
+		"TailscaleConfig": nodeClass.Spec.TailscaleConfig != nil,
+	}
+
+	// Add Tailscale-specific variables if enabled
+	if nodeClass.Spec.TailscaleConfig != nil {
+		tailscaleConfig := nodeClass.Spec.TailscaleConfig
+
+		// Build Tailscale tags
+		tags := tailscaleDefaults.Tags
+		if len(tailscaleConfig.Tags) > 0 {
+			tags = tailscaleConfig.Tags
+		}
+		tagsStr := strings.Join(tags, ",")
+
+		hostname := tailscaleConfig.Hostname
+		if hostname == "" {
+			hostname = fmt.Sprintf("tgp-%s-${HOSTNAME}", nodePool.Name)
+		}
+
+		vars["TailscaleAuthKey"] = "tskey-auth-placeholder" // TODO: Generate via OAuth
+		vars["TailscaleHostname"] = hostname
+		vars["TailscaleTags"] = tagsStr
+		vars["TailscaleFlags"] = getTailscaleFlags(tailscaleConfig)
+	}
+
+	return vars
+}
+
+// getKubeletImage returns the appropriate kubelet image for GPU nodes
+func getKubeletImage(nodeClass *tgpv1.GPUNodeClass) string {
+	if nodeClass.Spec.TalosConfig != nil && nodeClass.Spec.TalosConfig.KubeletImage != "" {
+		return nodeClass.Spec.TalosConfig.KubeletImage
+	}
+	// Default to standard kubelet - GPU Operator will handle GPU runtime
+	return "ghcr.io/siderolabs/kubelet:v1.31.1"
+}
+
+// getTailscaleFlags returns additional Tailscale flags based on configuration
+func getTailscaleFlags(config *tgpv1.TailscaleConfig) string {
+	flags := ""
+	if config != nil && config.GetAcceptRoutes() {
+		flags += " --accept-routes"
+	}
+	if config != nil && config.GetEphemeral() {
+		flags += " --ephemeral"
+	}
+	return flags
+}
+
+// applyTemplate applies Go template processing to the machine config template
+func (r *GPUNodePoolReconciler) applyTemplate(tmplStr string, vars map[string]interface{}) (string, error) {
+	// Create a new template with helper functions
+	tmpl, err := template.New("machineconfig").Funcs(template.FuncMap{
+		"join": strings.Join,
+	}).Parse(tmplStr)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse template: %w", err)
+	}
+
+	// Execute the template
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, vars); err != nil {
+		return "", fmt.Errorf("failed to execute template: %w", err)
+	}
+
+	return buf.String(), nil
 }
 
 // createKubernetesNode creates a Kubernetes Node object for the provisioned instance
