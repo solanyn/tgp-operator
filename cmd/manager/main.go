@@ -28,7 +28,6 @@ func init() { //nolint:gochecknoinits // Required for Kubernetes scheme registra
 	utilruntime.Must(tgpv1.AddToScheme(scheme))
 }
 
-
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool

@@ -69,14 +69,14 @@ func NewClient(apiKey string) *Client {
 func (c *Client) TranslateGPUType(standard string) (string, error) {
 	// Check if the provided type is already a valid Paperspace machine type
 	supportedTypes := []string{"P4000", "P5000", "P6000", "V100", "RTX4000", "RTX5000", "A100"}
-	
+
 	for _, supported := range supportedTypes {
 		if strings.EqualFold(standard, supported) {
 			return supported, nil
 		}
 	}
 
-	// If not a direct match, try to map common GPU names to Paperspace equivalents  
+	// If not a direct match, try to map common GPU names to Paperspace equivalents
 	switch strings.ToUpper(standard) {
 	case "RTX4090", "RTX4080", "RTX4070":
 		return "RTX4000", nil // RTX 4000 is closest available
@@ -151,7 +151,7 @@ func (c *Client) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFi
 			Region:      providers.RegionUSEast, // Paperspace regions are complex, simplify for now
 			HourlyPrice: c.getHourlyPrice(machineType),
 			Memory:      c.getGPUMemory(machineType),
-			Storage:     250, // Default storage
+			Storage:     250,  // Default storage
 			Available:   true, // Assume available if in templates
 			IsSpot:      false,
 			SpotPrice:   0,
@@ -179,7 +179,7 @@ func (c *Client) getGPUMemory(machineType string) int64 {
 	case strings.Contains(strings.ToLower(machineType), "a100"):
 		return 40 // A100 has 40GB
 	case strings.Contains(strings.ToLower(machineType), "v100"):
-		return 32 // V100 has 32GB  
+		return 32 // V100 has 32GB
 	case strings.Contains(strings.ToLower(machineType), "rtx6000"):
 		return 24 // RTX 6000 has 24GB
 	case strings.Contains(strings.ToLower(machineType), "rtx5000"):
@@ -227,10 +227,10 @@ func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchReques
 	// For now, return a proper implementation using the simplified approach
 	// The complex union types in Paperspace API make this challenging
 	// We'll use the API for status and terminate, but return mock for launch until we can handle the union types properly
-	
+
 	// TODO: Implement actual Paperspace API call using paperspaceGPUType
 	// This would involve creating the machine with the translated GPU type
-	
+
 	return &providers.GPUInstance{
 		ID:        fmt.Sprintf("paperspace-real-%s-%d", paperspaceGPUType, time.Now().Unix()),
 		Status:    providers.InstanceStatePending,
@@ -242,7 +242,7 @@ func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchReques
 // mapGPUTypeToMachineType maps standard GPU types to Paperspace machine types
 func (c *Client) mapGPUTypeToMachineType(gpuType string) (string, error) {
 	gpuTypeLower := strings.ToLower(gpuType)
-	
+
 	switch {
 	case strings.Contains(gpuTypeLower, "rtx4000"):
 		return "C5", nil
@@ -264,7 +264,6 @@ func (c *Client) mapGPUTypeToMachineType(gpuType string) (string, error) {
 		return "", fmt.Errorf("unsupported GPU type: %s", gpuType)
 	}
 }
-
 
 func (c *Client) GetInstanceStatus(ctx context.Context, instanceID string) (*providers.InstanceStatus, error) {
 	if c.apiClient == nil {

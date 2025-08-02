@@ -250,7 +250,7 @@ func (r *GPUNodeClassReconciler) updateGPUAvailability(ctx context.Context, node
 	availableGPUs := make(map[string][]tgpv1.GPUAvailability)
 	providerStatuses := make(map[string]tgpv1.ProviderStatus)
 	now := metav1.Now()
-	
+
 	for _, providerConfig := range nodeClass.Spec.Providers {
 		providerName := providerConfig.Name
 		providerStatus := tgpv1.ProviderStatus{
@@ -271,7 +271,7 @@ func (r *GPUNodeClassReconciler) updateGPUAvailability(ctx context.Context, node
 		if namespace == "" {
 			namespace = nodeClass.Namespace
 		}
-		
+
 		credentials, err := r.Config.GetProviderCredentials(ctx, r.Client, providerConfig.Name, namespace)
 		if err != nil {
 			providerStatus.Error = fmt.Sprintf("Failed to get credentials: %v", err)
@@ -293,7 +293,7 @@ func (r *GPUNodeClassReconciler) updateGPUAvailability(ctx context.Context, node
 
 		log.V(1).Info("Provider client created successfully", "provider", providerName, "providerInfo", fmt.Sprintf("%T", providerClient))
 		log.Info("Provider credentials validated", "provider", providerName)
-		
+
 		// Credentials are valid
 		providerStatus.CredentialsValid = true
 		r.updateProviderCondition(nodeClass, providerName, metav1.ConditionTrue, "Ready", "Provider credentials validated and client ready")
@@ -320,10 +320,10 @@ func (r *GPUNodeClassReconciler) updateGPUAvailability(ctx context.Context, node
 
 		// Successfully fetched pricing data
 		providerStatus.LastPricingUpdate = &now
-		
+
 		// Convert offers to GPU availability format
 		gpuAvailability := r.convertOffersToGPUAvailability(offers, now)
-		
+
 		if len(gpuAvailability) > 0 {
 			availableGPUs[providerName] = gpuAvailability
 			log.V(1).Info("Updated GPU availability", "provider", providerName, "gpuTypes", len(gpuAvailability))
@@ -336,7 +336,7 @@ func (r *GPUNodeClassReconciler) updateGPUAvailability(ctx context.Context, node
 	nodeClass.Status.AvailableGPUs = availableGPUs
 	nodeClass.Status.Providers = providerStatuses
 	nodeClass.Status.LastInventoryUpdate = &now
-	
+
 	// Schedule next inventory update (5 minutes from now)
 	nextUpdate := metav1.NewTime(now.Add(5 * time.Minute))
 	nodeClass.Status.NextInventoryUpdate = &nextUpdate
@@ -365,7 +365,7 @@ func (r *GPUNodeClassReconciler) rateLimitProvider(providerName string) error {
 // handleProviderAPIError handles specific provider API errors and returns user-friendly messages
 func (r *GPUNodeClassReconciler) handleProviderAPIError(providerName string, err error) string {
 	errStr := err.Error()
-	
+
 	switch providerName {
 	case "paperspace":
 		if contains(errStr, "json: cannot unmarshal number") && contains(errStr, "defaultSizeGb") {
@@ -380,7 +380,7 @@ func (r *GPUNodeClassReconciler) handleProviderAPIError(providerName string, err
 			return "RunPod API authentication failed. Check API key."
 		}
 	}
-	
+
 	// Generic error handling
 	if contains(errStr, "429") || contains(errStr, "rate limit") {
 		return fmt.Sprintf("API rate limit exceeded: %v", err)
@@ -391,7 +391,7 @@ func (r *GPUNodeClassReconciler) handleProviderAPIError(providerName string, err
 	if contains(errStr, "network") || contains(errStr, "connection") {
 		return fmt.Sprintf("Network error: %v", err)
 	}
-	
+
 	return fmt.Sprintf("API error: %v", err)
 }
 
@@ -399,7 +399,7 @@ func (r *GPUNodeClassReconciler) handleProviderAPIError(providerName string, err
 func (r *GPUNodeClassReconciler) convertOffersToGPUAvailability(offers []providers.GPUOffer, timestamp metav1.Time) []tgpv1.GPUAvailability {
 	var gpuAvailability []tgpv1.GPUAvailability
 	gpuTypeMap := make(map[string]*tgpv1.GPUAvailability)
-	
+
 	for _, offer := range offers {
 		key := offer.GPUType
 		if existing, exists := gpuTypeMap[key]; exists {
@@ -410,7 +410,7 @@ func (r *GPUNodeClassReconciler) convertOffersToGPUAvailability(offers []provide
 			if offer.IsSpot && offer.SpotPrice > 0 {
 				spotPrice = fmt.Sprintf("%.2f", offer.SpotPrice)
 			}
-			
+
 			gpu := &tgpv1.GPUAvailability{
 				GPUType:      offer.GPUType,
 				Regions:      []string{offer.Region},
@@ -424,7 +424,7 @@ func (r *GPUNodeClassReconciler) convertOffersToGPUAvailability(offers []provide
 			gpuAvailability = append(gpuAvailability, *gpu)
 		}
 	}
-	
+
 	return gpuAvailability
 }
 
@@ -456,7 +456,7 @@ func mergeRegions(existing, new []string) []string {
 	for _, region := range new {
 		regionMap[region] = true
 	}
-	
+
 	var result []string
 	for region := range regionMap {
 		result = append(result, region)
