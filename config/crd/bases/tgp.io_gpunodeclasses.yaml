@@ -160,25 +160,6 @@ spec:
                     items:
                       type: string
                     type: array
-                  authKeySecretRef:
-                    description: |-
-                      AuthKeySecretRef references a secret containing the Tailscale auth key
-                      Deprecated: Use OAuthCredentialsSecretRef for better security and automatic key management
-                    properties:
-                      key:
-                        description: Key is the key within the secret
-                        type: string
-                      name:
-                        description: Name is the name of the secret
-                        type: string
-                      namespace:
-                        description: Namespace is the namespace of the secret (optional,
-                          defaults to current namespace)
-                        type: string
-                    required:
-                    - key
-                    - name
-                    type: object
                   ephemeral:
                     description: |-
                       Ephemeral indicates whether the device should be ephemeral (cleanup on deletion)

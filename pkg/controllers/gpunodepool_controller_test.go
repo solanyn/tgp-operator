@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -135,7 +136,7 @@ machine:
 				Config: tt.config,
 			}
 
-			result, err := reconciler.buildUserDataScript(tt.nodePool, tt.nodeClass)
+			result, err := reconciler.buildUserDataScript(context.Background(), tt.nodePool, tt.nodeClass)
 
 			if tt.expectError && err == nil {
 				t.Error("expected error but got none")
@@ -197,3 +198,4 @@ FalseSection: should not appear
 		}
 	}
 }
+

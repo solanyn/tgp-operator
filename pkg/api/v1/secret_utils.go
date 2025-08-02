@@ -51,20 +51,11 @@ func (tc *TailscaleConfig) Resolve(ctx context.Context, client client.Client, na
 		Ephemeral:                 tc.Ephemeral,
 		AcceptRoutes:              tc.AcceptRoutes,
 		AdvertiseRoutes:           tc.AdvertiseRoutes,
-		AuthKeySecretRef:          tc.AuthKeySecretRef,
 		OAuthCredentialsSecretRef: tc.OAuthCredentialsSecretRef,
 		OperatorConfig:            tc.OperatorConfig,
 	}
 
-	// Resolve auth key secret reference (legacy)
-	if tc.AuthKeySecretRef != nil {
-		_, err := resolveSecretRef(ctx, client, tc.AuthKeySecretRef, namespace)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve authKey secret: %w", err)
-		}
-	}
-
-	// Resolve OAuth credentials secret reference (preferred)
+	// Resolve OAuth credentials secret reference
 	if tc.OAuthCredentialsSecretRef != nil {
 		err := tc.resolveOAuthCredentials(ctx, client, namespace)
 		if err != nil {

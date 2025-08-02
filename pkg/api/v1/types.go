@@ -415,11 +415,6 @@ type TailscaleConfig struct {
 	// +optional
 	AdvertiseRoutes []string `json:"advertiseRoutes,omitempty"`
 
-	// AuthKeySecretRef references a secret containing the Tailscale auth key
-	// Deprecated: Use OAuthCredentialsSecretRef for better security and automatic key management
-	// +optional
-	AuthKeySecretRef *SecretKeyRef `json:"authKeySecretRef,omitempty"`
-
 	// OAuthCredentialsSecretRef references a secret containing Tailscale OAuth credentials
 	// The operator will use these to dynamically generate auth keys as needed
 	// Secret should contain 'client-id' and 'client-secret' keys

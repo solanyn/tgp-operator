@@ -27,6 +27,7 @@ import (
 	"github.com/solanyn/tgp-operator/pkg/providers/lambdalabs"
 	"github.com/solanyn/tgp-operator/pkg/providers/paperspace"
 	"github.com/solanyn/tgp-operator/pkg/providers/runpod"
+	"github.com/solanyn/tgp-operator/pkg/tailscale"
 )
 
 const (
@@ -309,7 +310,7 @@ func (r *GPUNodePoolReconciler) provisionNodeForPod(ctx context.Context, nodePoo
 		"gpuType", gpuRequirement.GPUType)
 
 	// Create launch request
-	launchRequest, err := r.createLaunchRequest(nodePool, nodeClass, gpuRequirement)
+	launchRequest, err := r.createLaunchRequest(ctx, nodePool, nodeClass, gpuRequirement)
 	if err != nil {
 		return fmt.Errorf("failed to create launch request: %w", err)
 	}
@@ -468,9 +469,9 @@ func (r *GPUNodePoolReconciler) createProviderClient(providerName, credentials s
 }
 
 // createLaunchRequest creates a launch request for the selected provider
-func (r *GPUNodePoolReconciler) createLaunchRequest(nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass, requirement *GPURequirement) (*providers.LaunchRequest, error) {
+func (r *GPUNodePoolReconciler) createLaunchRequest(ctx context.Context, nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass, requirement *GPURequirement) (*providers.LaunchRequest, error) {
 	// Build user data script for node setup
-	userData, err := r.buildUserDataScript(nodePool, nodeClass)
+	userData, err := r.buildUserDataScript(ctx, nodePool, nodeClass)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build user data script: %w", err)
 	}
@@ -507,9 +508,9 @@ func (r *GPUNodePoolReconciler) createLaunchRequest(nodePool *tgpv1.GPUNodePool,
 }
 
 // buildUserDataScript creates provider-specific initialization data for new nodes
-func (r *GPUNodePoolReconciler) buildUserDataScript(nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass) (string, error) {
+func (r *GPUNodePoolReconciler) buildUserDataScript(ctx context.Context, nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass) (string, error) {
 	// Generate Talos machine configuration
-	machineConfig, err := r.generateTalosMachineConfig(nodePool, nodeClass)
+	machineConfig, err := r.generateTalosMachineConfig(ctx, nodePool, nodeClass)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate Talos machine config: %w", err)
 	}
@@ -518,12 +519,15 @@ func (r *GPUNodePoolReconciler) buildUserDataScript(nodePool *tgpv1.GPUNodePool,
 }
 
 // generateTalosMachineConfig creates a Talos machine configuration for the node
-func (r *GPUNodePoolReconciler) generateTalosMachineConfig(nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass) (string, error) {
+func (r *GPUNodePoolReconciler) generateTalosMachineConfig(ctx context.Context, nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass) (string, error) {
 	// Get the machine config template
 	template := r.getMachineConfigTemplate(nodeClass)
 
 	// Create template variables for substitution
-	templateVars := r.buildTemplateVariables(nodePool, nodeClass)
+	templateVars, err := r.buildTemplateVariables(ctx, nodePool, nodeClass)
+	if err != nil {
+		return "", fmt.Errorf("failed to build template variables: %w", err)
+	}
 
 	// Apply template substitution
 	config, err := r.applyTemplate(template, templateVars)
@@ -712,7 +716,7 @@ cluster:
 }
 
 // buildTemplateVariables creates a map of variables for template substitution
-func (r *GPUNodePoolReconciler) buildTemplateVariables(nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass) map[string]interface{} {
+func (r *GPUNodePoolReconciler) buildTemplateVariables(ctx context.Context, nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass) (map[string]interface{}, error) {
 	talosDefaults := r.Config.Talos
 	tailscaleDefaults := r.Config.Tailscale
 
@@ -765,13 +769,18 @@ func (r *GPUNodePoolReconciler) buildTemplateVariables(nodePool *tgpv1.GPUNodePo
 			hostname = fmt.Sprintf("tgp-%s-${HOSTNAME}", nodePool.Name)
 		}
 
-		vars["TailscaleAuthKey"] = "tskey-auth-placeholder" // TODO: Generate via OAuth
+		// Generate Tailscale auth key via OAuth
+		authKey, err := r.generateTailscaleAuthKey(ctx, tailscaleConfig, tags)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate Tailscale auth key: %w", err)
+		}
+		vars["TailscaleAuthKey"] = authKey
 		vars["TailscaleHostname"] = hostname
 		vars["TailscaleTags"] = tagsStr
 		vars["TailscaleFlags"] = getTailscaleFlags(tailscaleConfig)
 	}
 
-	return vars
+	return vars, nil
 }
 
 // getKubeletImage returns the appropriate kubelet image for GPU nodes
@@ -1034,6 +1043,66 @@ func (r *GPUNodePoolReconciler) isStaticPod(pod *corev1.Pod) bool {
 	}
 	return false
 }
+
+// generateTailscaleAuthKey generates a Tailscale auth key using OAuth credentials
+func (r *GPUNodePoolReconciler) generateTailscaleAuthKey(ctx context.Context, tailscaleConfig *tgpv1.TailscaleConfig, tags []string) (string, error) {
+	if tailscaleConfig.OAuthCredentialsSecretRef == nil {
+		return "", fmt.Errorf("OAuth credentials secret reference is required")
+	}
+
+	// Resolve OAuth credentials from secret
+	clientID, clientSecret, err := r.getOAuthCredentials(ctx, tailscaleConfig.OAuthCredentialsSecretRef)
+	if err != nil {
+		return "", fmt.Errorf("failed to get OAuth credentials: %w", err)
+	}
+
+	// Create Tailscale OAuth client
+	client := tailscale.NewClient(clientID, clientSecret)
+
+	// Generate auth key with options
+	authKey, err := client.GenerateAuthKey(ctx, tailscale.AuthKeyOptions{
+		Tags:      tags,
+		Ephemeral: tailscaleConfig.GetEphemeral(),
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to generate auth key: %w", err)
+	}
+
+	return authKey, nil
+}
+
+// getOAuthCredentials retrieves OAuth credentials from the referenced secret
+func (r *GPUNodePoolReconciler) getOAuthCredentials(ctx context.Context, ref *tgpv1.TailscaleOAuthSecretRef) (string, string, error) {
+	namespace := ref.Namespace
+	if namespace == "" {
+		namespace = "default" // TODO: Get from context or controller config
+	}
+
+	secret := &corev1.Secret{}
+	err := r.Get(ctx, types.NamespacedName{
+		Name:      ref.Name,
+		Namespace: namespace,
+	}, secret)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get OAuth secret %s/%s: %w", namespace, ref.Name, err)
+	}
+
+	clientIDKey := ref.GetClientIDKey()
+	clientSecretKey := ref.GetClientSecretKey()
+
+	clientID, exists := secret.Data[clientIDKey]
+	if !exists {
+		return "", "", fmt.Errorf("client ID key %s not found in secret %s/%s", clientIDKey, namespace, ref.Name)
+	}
+
+	clientSecret, exists := secret.Data[clientSecretKey]
+	if !exists {
+		return "", "", fmt.Errorf("client secret key %s not found in secret %s/%s", clientSecretKey, namespace, ref.Name)
+	}
+
+	return string(clientID), string(clientSecret), nil
+}
+
 
 // SetupWithManager sets up the controller with the Manager
 func (r *GPUNodePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {

@@ -661,11 +661,6 @@ func (in *TailscaleConfig) DeepCopyInto(out *TailscaleConfig) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
-	if in.AuthKeySecretRef != nil {
-		in, out := &in.AuthKeySecretRef, &out.AuthKeySecretRef
-		*out = new(SecretKeyRef)
-		**out = **in
-	}
 	if in.OAuthCredentialsSecretRef != nil {
 		in, out := &in.OAuthCredentialsSecretRef, &out.OAuthCredentialsSecretRef
 		*out = new(TailscaleOAuthSecretRef)
