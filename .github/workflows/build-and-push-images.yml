@@ -4,6 +4,7 @@ on:
   push:
     tags: [v*]
     branches: [main]
+  workflow_dispatch:
   workflow_call:
     inputs:
       push:
