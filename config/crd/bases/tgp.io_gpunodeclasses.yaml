@@ -395,6 +395,44 @@ spec:
                   last refreshed
                 format: date-time
                 type: string
+              nextInventoryUpdate:
+                description: NextInventoryUpdate is when the next inventory refresh
+                  is scheduled
+                format: date-time
+                type: string
+              providers:
+                additionalProperties:
+                  description: ProviderStatus contains status information for a cloud
+                    provider
+                  properties:
+                    credentialsValid:
+                      description: CredentialsValid indicates whether the provider
+                        credentials are valid
+                      type: boolean
+                    error:
+                      description: Error contains the error message if credential
+                        validation failed
+                      type: string
+                    inventoryEnabled:
+                      description: InventoryEnabled indicates whether this provider
+                        is actively being used for inventory
+                      type: boolean
+                    lastCredentialCheck:
+                      description: LastCredentialCheck is when the credentials were
+                        last validated
+                      format: date-time
+                      type: string
+                    lastPricingUpdate:
+                      description: LastPricingUpdate is when pricing data was last
+                        successfully fetched
+                      format: date-time
+                      type: string
+                  required:
+                  - credentialsValid
+                  type: object
+                description: Providers contains status information for each configured
+                  provider
+                type: object
               totalCost:
                 description: TotalCost is the current hourly cost of all active nodes
                 type: string

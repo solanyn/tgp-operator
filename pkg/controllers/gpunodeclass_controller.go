@@ -4,6 +4,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -247,82 +248,189 @@ func (r *GPUNodeClassReconciler) getActiveNodePools(ctx context.Context, nodeCla
 // updateGPUAvailability queries providers and updates the GPU availability status
 func (r *GPUNodeClassReconciler) updateGPUAvailability(ctx context.Context, nodeClass *tgpv1.GPUNodeClass, log logr.Logger) error {
 	availableGPUs := make(map[string][]tgpv1.GPUAvailability)
+	providerStatuses := make(map[string]tgpv1.ProviderStatus)
+	now := metav1.Now()
 	
 	for _, providerConfig := range nodeClass.Spec.Providers {
+		providerName := providerConfig.Name
+		providerStatus := tgpv1.ProviderStatus{
+			CredentialsValid:    false,
+			LastCredentialCheck: &now,
+			InventoryEnabled:    providerConfig.Enabled == nil || *providerConfig.Enabled,
+		}
+
+		// Skip disabled providers
 		if providerConfig.Enabled != nil && !*providerConfig.Enabled {
+			providerStatus.Error = "Provider disabled in configuration"
+			providerStatuses[providerName] = providerStatus
 			continue
 		}
 
-		// Get credentials for this provider
+		// Validate credentials
 		namespace := providerConfig.CredentialsRef.Namespace
 		if namespace == "" {
 			namespace = nodeClass.Namespace
 		}
+		
 		credentials, err := r.Config.GetProviderCredentials(ctx, r.Client, providerConfig.Name, namespace)
 		if err != nil {
-			log.Error(err, "Failed to get credentials for provider", "provider", providerConfig.Name)
+			providerStatus.Error = fmt.Sprintf("Failed to get credentials: %v", err)
+			providerStatuses[providerName] = providerStatus
+			r.updateProviderCondition(nodeClass, providerName, metav1.ConditionFalse, "CredentialError", providerStatus.Error)
+			log.Error(err, "Failed to get credentials for provider", "provider", providerName)
 			continue
 		}
 
-		// Create provider client
+		// Create and validate provider client
 		providerClient, err := r.createProviderClient(providerConfig.Name, credentials)
 		if err != nil {
-			log.Error(err, "Failed to create provider client", "provider", providerConfig.Name)
+			providerStatus.Error = fmt.Sprintf("Failed to create client: %v", err)
+			providerStatuses[providerName] = providerStatus
+			r.updateProviderCondition(nodeClass, providerName, metav1.ConditionFalse, "ClientError", providerStatus.Error)
+			log.Error(err, "Failed to create provider client", "provider", providerName)
 			continue
 		}
 
-		// Query available GPUs
+		log.V(1).Info("Provider client created successfully", "provider", providerName, "providerInfo", fmt.Sprintf("%T", providerClient))
+		log.Info("Provider credentials validated", "provider", providerName)
+		
+		// Credentials are valid
+		providerStatus.CredentialsValid = true
+		r.updateProviderCondition(nodeClass, providerName, metav1.ConditionTrue, "Ready", "Provider credentials validated and client ready")
+
+		// Apply rate limiting to avoid hitting API limits
+		if err := r.rateLimitProvider(providerName); err != nil {
+			providerStatus.Error = fmt.Sprintf("Rate limited: %v", err)
+			providerStatuses[providerName] = providerStatus
+			log.V(1).Info("Provider rate limited, skipping this cycle", "provider", providerName)
+			continue
+		}
+
+		// Query available GPUs with error handling
 		offers, err := providerClient.ListAvailableGPUs(ctx, &providers.GPUFilters{})
 		if err != nil {
-			log.Error(err, "Failed to query GPU availability", "provider", providerConfig.Name)
+			// Handle specific API errors gracefully
+			errorMsg := r.handleProviderAPIError(providerName, err)
+			providerStatus.Error = errorMsg
+			providerStatuses[providerName] = providerStatus
+			r.updateProviderCondition(nodeClass, providerName, metav1.ConditionFalse, "APIError", errorMsg)
+			log.Error(err, "Failed to query GPU availability", "provider", providerName)
 			continue
 		}
 
-		// Convert offers to GPU availability format
-		var gpuAvailability []tgpv1.GPUAvailability
-		gpuTypeMap := make(map[string]*tgpv1.GPUAvailability)
+		// Successfully fetched pricing data
+		providerStatus.LastPricingUpdate = &now
 		
-		for _, offer := range offers {
-			key := offer.GPUType
-			if existing, exists := gpuTypeMap[key]; exists {
-				// Merge regions for same GPU type
-				existing.Regions = mergeRegions(existing.Regions, []string{offer.Region})
-			} else {
-				spotPrice := ""
-				if offer.IsSpot && offer.SpotPrice > 0 {
-					spotPrice = fmt.Sprintf("%.2f", offer.SpotPrice)
-				}
-				
-				gpu := &tgpv1.GPUAvailability{
-					GPUType:      offer.GPUType,
-					Regions:      []string{offer.Region},
-					PricePerHour: fmt.Sprintf("%.2f", offer.HourlyPrice),
-					Memory:       offer.Memory,
-					Available:    offer.Available,
-					SpotPrice:    &spotPrice,
-					LastUpdated:  metav1.Now(),
-				}
-				gpuTypeMap[key] = gpu
-				gpuAvailability = append(gpuAvailability, *gpu)
-			}
+		// Convert offers to GPU availability format
+		gpuAvailability := r.convertOffersToGPUAvailability(offers, now)
+		
+		if len(gpuAvailability) > 0 {
+			availableGPUs[providerName] = gpuAvailability
+			log.V(1).Info("Updated GPU availability", "provider", providerName, "gpuTypes", len(gpuAvailability))
 		}
 
-		if len(gpuAvailability) > 0 {
-			availableGPUs[providerConfig.Name] = gpuAvailability
-			log.V(1).Info("Updated GPU availability", "provider", providerConfig.Name, "gpuTypes", len(gpuAvailability))
-		}
+		providerStatuses[providerName] = providerStatus
 	}
 
-	// Update status
+	// Update status with all provider information
 	nodeClass.Status.AvailableGPUs = availableGPUs
-	now := metav1.Now()
+	nodeClass.Status.Providers = providerStatuses
 	nodeClass.Status.LastInventoryUpdate = &now
+	
+	// Schedule next inventory update (5 minutes from now)
+	nextUpdate := metav1.NewTime(now.Add(5 * time.Minute))
+	nodeClass.Status.NextInventoryUpdate = &nextUpdate
 
 	if err := r.Status().Update(ctx, nodeClass); err != nil {
 		return fmt.Errorf("failed to update GPU availability status: %w", err)
 	}
 
 	return nil
+}
+
+// updateProviderCondition updates the condition for a specific provider
+func (r *GPUNodeClassReconciler) updateProviderCondition(nodeClass *tgpv1.GPUNodeClass, providerName string, status metav1.ConditionStatus, reason, message string) {
+	conditionType := fmt.Sprintf("%sReady", providerName)
+	r.updateCondition(nodeClass, conditionType, status, reason, message)
+}
+
+// rateLimitProvider implements rate limiting for provider API calls
+func (r *GPUNodeClassReconciler) rateLimitProvider(providerName string) error {
+	// TODO: Implement actual rate limiting with token bucket or similar
+	// For now, just add a small delay to avoid overwhelming APIs
+	time.Sleep(100 * time.Millisecond)
+	return nil
+}
+
+// handleProviderAPIError handles specific provider API errors and returns user-friendly messages
+func (r *GPUNodeClassReconciler) handleProviderAPIError(providerName string, err error) string {
+	errStr := err.Error()
+	
+	switch providerName {
+	case "paperspace":
+		if contains(errStr, "json: cannot unmarshal number") && contains(errStr, "defaultSizeGb") {
+			return "Paperspace API schema incompatibility (defaultSizeGb field). This is a known issue with the generated client."
+		}
+	case "lambdalabs":
+		if contains(errStr, "429") || contains(errStr, "Too Many Requests") {
+			return "Lambda Labs API rate limit exceeded. Will retry in next cycle."
+		}
+	case "runpod":
+		if contains(errStr, "401") || contains(errStr, "Unauthorized") {
+			return "RunPod API authentication failed. Check API key."
+		}
+	}
+	
+	// Generic error handling
+	if contains(errStr, "429") || contains(errStr, "rate limit") {
+		return fmt.Sprintf("API rate limit exceeded: %v", err)
+	}
+	if contains(errStr, "401") || contains(errStr, "403") || contains(errStr, "Unauthorized") {
+		return fmt.Sprintf("Authentication failed: %v", err)
+	}
+	if contains(errStr, "network") || contains(errStr, "connection") {
+		return fmt.Sprintf("Network error: %v", err)
+	}
+	
+	return fmt.Sprintf("API error: %v", err)
+}
+
+// convertOffersToGPUAvailability converts provider offers to GPUAvailability format
+func (r *GPUNodeClassReconciler) convertOffersToGPUAvailability(offers []providers.GPUOffer, timestamp metav1.Time) []tgpv1.GPUAvailability {
+	var gpuAvailability []tgpv1.GPUAvailability
+	gpuTypeMap := make(map[string]*tgpv1.GPUAvailability)
+	
+	for _, offer := range offers {
+		key := offer.GPUType
+		if existing, exists := gpuTypeMap[key]; exists {
+			// Merge regions for same GPU type
+			existing.Regions = mergeRegions(existing.Regions, []string{offer.Region})
+		} else {
+			spotPrice := ""
+			if offer.IsSpot && offer.SpotPrice > 0 {
+				spotPrice = fmt.Sprintf("%.2f", offer.SpotPrice)
+			}
+			
+			gpu := &tgpv1.GPUAvailability{
+				GPUType:      offer.GPUType,
+				Regions:      []string{offer.Region},
+				PricePerHour: fmt.Sprintf("%.2f", offer.HourlyPrice),
+				Memory:       offer.Memory,
+				Available:    offer.Available,
+				SpotPrice:    &spotPrice,
+				LastUpdated:  timestamp,
+			}
+			gpuTypeMap[key] = gpu
+			gpuAvailability = append(gpuAvailability, *gpu)
+		}
+	}
+	
+	return gpuAvailability
+}
+
+// contains is a helper function to check if a string contains a substring
+func contains(s, substr string) bool {
+	return strings.Contains(s, substr)
 }
 
 // createProviderClient creates a provider client based on provider name (duplicate of gpunodepool_controller)

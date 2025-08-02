@@ -72,6 +72,10 @@ type GPUNodeClassStatus struct {
 	// +optional
 	TotalCost string `json:"totalCost,omitempty"`
 
+	// Providers contains status information for each configured provider
+	// +optional
+	Providers map[string]ProviderStatus `json:"providers,omitempty"`
+
 	// AvailableGPUs shows current GPU availability from all enabled providers
 	// +optional
 	AvailableGPUs map[string][]GPUAvailability `json:"availableGPUs,omitempty"`
@@ -79,6 +83,32 @@ type GPUNodeClassStatus struct {
 	// LastInventoryUpdate is when the GPU availability was last refreshed
 	// +optional
 	LastInventoryUpdate *metav1.Time `json:"lastInventoryUpdate,omitempty"`
+
+	// NextInventoryUpdate is when the next inventory refresh is scheduled
+	// +optional
+	NextInventoryUpdate *metav1.Time `json:"nextInventoryUpdate,omitempty"`
+}
+
+// ProviderStatus contains status information for a cloud provider
+type ProviderStatus struct {
+	// CredentialsValid indicates whether the provider credentials are valid
+	CredentialsValid bool `json:"credentialsValid"`
+
+	// LastCredentialCheck is when the credentials were last validated
+	// +optional
+	LastCredentialCheck *metav1.Time `json:"lastCredentialCheck,omitempty"`
+
+	// Error contains the error message if credential validation failed
+	// +optional
+	Error string `json:"error,omitempty"`
+
+	// LastPricingUpdate is when pricing data was last successfully fetched
+	// +optional
+	LastPricingUpdate *metav1.Time `json:"lastPricingUpdate,omitempty"`
+
+	// InventoryEnabled indicates whether this provider is actively being used for inventory
+	// +optional
+	InventoryEnabled bool `json:"inventoryEnabled,omitempty"`
 }
 
 // GPUAvailability represents available GPU instances from a provider
