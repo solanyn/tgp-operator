@@ -97,6 +97,10 @@ jobs:
       - name: Install Task
         run: |
           sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+      - name: Install mise
+        uses: jdx/mise-action@v2
+        with:
+          cache: true
       - name: Update chart version
         run: |
           sed -i "s/version: .*/version: ${{ steps.version.outputs.chart_version }}/" chart/Chart.yaml
