@@ -94,11 +94,17 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/}
           echo "chart_version=${VERSION#v}" >> "$GITHUB_OUTPUT"
           echo "app_version=${VERSION#v}" >> "$GITHUB_OUTPUT"
+      - name: Install Task
+        run: |
+          sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
       - name: Update chart version
         run: |
           sed -i "s/version: .*/version: ${{ steps.version.outputs.chart_version }}/" chart/Chart.yaml
           sed -i "s/appVersion: .*/appVersion: \"${{ steps.version.outputs.app_version }}\"/" chart/Chart.yaml
           sed -i "s/tag: .*/tag: ${{ steps.version.outputs.app_version }}/" chart/values.yaml
+      - name: Generate CRDs for chart
+        run: |
+          task chart:crd
       - name: Lint chart
         run: |
           helm lint chart/
