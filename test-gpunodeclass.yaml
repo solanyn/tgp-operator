@@ -1,0 +1,30 @@
+apiVersion: tgp.io/v1
+kind: GPUNodeClass
+metadata:
+  name: test-gpu-class
+spec:
+  providers:
+    - name: runpod
+      priority: 1
+      enabled: true
+      credentialsRef:
+        name: provider-credentials
+        key: RUNPOD_API_KEY
+    - name: lambdalabs
+      priority: 2
+      enabled: true
+      credentialsRef:
+        name: provider-credentials
+        key: LAMBDA_LABS_API_KEY
+  talosConfig:
+    image: "ghcr.io/siderolabs/talos:v1.10.5"
+  tailscaleConfig:
+    tags: ["tag:k8s", "tag:gpu"]
+    ephemeral: true
+    acceptRoutes: true
+  instanceRequirements:
+    gpuTypes: ["RTX4090", "RTX3090"]
+    spotAllowed: true
+  limits:
+    maxNodes: 2
+    maxHourlyCost: "10.0"

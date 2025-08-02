@@ -35,6 +35,15 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
+      - name: Debug push decision
+        run: |
+          echo "Event name: ${{ github.event_name }}"
+          echo "inputs.push: '${{ inputs.push }}'"
+          echo "github.ref: '${{ github.ref }}'"
+          echo "startsWith(github.ref, 'refs/tags/v'): ${{ startsWith(github.ref, 'refs/tags/v') }}"
+          echo "github.ref == 'refs/heads/main': ${{ github.ref == 'refs/heads/main' }}"
+          echo "(inputs.push != false): ${{ inputs.push != false }}"
+          echo "Final push decision: ${{ (inputs.push != false) && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main') }}"
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -56,7 +65,7 @@ jobs:
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: ${{ (inputs.push != false) && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main') }}
+          push: ${{ github.event_name == 'push' || (github.event_name == 'workflow_call' && inputs.push != false) }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=ghcr.io/solanyn/build_cache:tgp-operator,mode=max
