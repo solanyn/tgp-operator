@@ -26,5 +26,3 @@ serviceAccount:
   annotations: {}
 rbac:
   create: true
-# Configuration is now managed through GPUNodeClass CRDs
-# See examples/ directory for sample configurations
