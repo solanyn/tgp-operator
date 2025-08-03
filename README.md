@@ -71,14 +71,34 @@ First, create provider credentials and configure infrastructure templates with `
 #### Step 1: Create Provider Credentials
 
 ```bash
-kubectl create secret generic provider-credentials \
+# Create provider credentials secret
+kubectl create secret generic tgp-operator-secret \
   --from-literal=RUNPOD_API_KEY=your-runpod-key \
   --from-literal=LAMBDA_LABS_API_KEY=your-lambda-key \
   --from-literal=PAPERSPACE_API_KEY=your-paperspace-key \
+  --from-literal=client-id=your-tailscale-oauth-client-id \
+  --from-literal=client-secret=your-tailscale-oauth-client-secret \
   -n tgp-system
 ```
 
+Ensure all credentials are properly configured:
+- **Provider API keys** from your cloud provider accounts
+- **Tailscale OAuth credentials** from your Tailscale admin console
+
 #### Step 2: Create GPUNodeClass (Infrastructure Template)
+
+The `GPUNodeClass` requires a complete Talos machine configuration template. The following template variables are automatically provided by the operator:
+
+- `{{.MachineToken}}` - Token for joining the cluster
+- `{{.ClusterCA}}` - Cluster CA certificate
+- `{{.ClusterID}}` - Cluster ID
+- `{{.ClusterSecret}}` - Cluster secret
+- `{{.ControlPlaneEndpoint}}` - Control plane endpoint URL
+- `{{.ClusterName}}` - Cluster name
+- `{{.TailscaleAuthKey}}` - Generated Tailscale auth key
+- `{{.NodeName}}` - Generated node name
+- `{{.NodePool}}` - NodePool name
+- `{{.NodeIndex}}` - Node index in pool
 
 ```yaml
 apiVersion: tgp.io/v1
@@ -91,16 +111,64 @@ spec:
       priority: 1
       enabled: true
       credentialsRef:
-        name: provider-credentials
+        name: tgp-operator-secret
         key: RUNPOD_API_KEY
     - name: lambdalabs
       priority: 2
       enabled: true
       credentialsRef:
-        name: provider-credentials
+        name: tgp-operator-secret
         key: LAMBDA_LABS_API_KEY
   talosConfig:
     image: "ghcr.io/siderolabs/talos:v1.10.5"
+    machineConfigTemplate: |
+      version: v1alpha1
+      debug: false
+      persist: true
+      machine:
+        token: {{.MachineToken}}
+        ca:
+          crt: {{.ClusterCA}}
+        certSANs:
+          - 127.0.0.1
+        kubelet:
+          extraMounts:
+            - destination: /var/mnt/extra
+              type: bind
+              source: /var/mnt/extra
+              options: [bind, rshared, rw]
+        files:
+          - path: /etc/tailscale/authkey
+            permissions: 0o600
+            op: create
+            content: {{.TailscaleAuthKey}}
+          - path: /etc/systemd/system/tailscaled.service
+            op: create
+            content: |
+              [Unit]
+              Description=Tailscale VPN
+              After=network.target
+              [Service]
+              Type=notify
+              ExecStart=/usr/bin/tailscaled --state=/var/lib/tailscale/tailscaled.state
+              ExecStartPost=/usr/bin/tailscale up --authkey-file=/etc/tailscale/authkey --hostname={{.NodeName}}
+              Restart=always
+              [Install]
+              WantedBy=multi-user.target
+        systemd:
+          services:
+            - name: tailscaled.service
+              enabled: true
+        nodeLabels:
+          tgp.io/nodepool: {{.NodePool}}
+          tgp.io/provisioned: "true"
+          node.kubernetes.io/instance-type: "gpu"
+      cluster:
+        id: {{.ClusterID}}
+        secret: {{.ClusterSecret}}
+        controlPlane:
+          endpoint: {{.ControlPlaneEndpoint}}
+        clusterName: {{.ClusterName}}
   tailscaleConfig:
     tags: ["tag:k8s", "tag:gpu"]
     ephemeral: true

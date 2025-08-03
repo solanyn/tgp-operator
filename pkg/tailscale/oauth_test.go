@@ -92,4 +92,3 @@ func TestClient_validateCredentials(t *testing.T) {
 		})
 	}
 }
-

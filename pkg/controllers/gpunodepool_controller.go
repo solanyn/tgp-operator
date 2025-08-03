@@ -717,7 +717,9 @@ cluster:
 
 // buildTemplateVariables creates a map of variables for template substitution
 func (r *GPUNodePoolReconciler) buildTemplateVariables(ctx context.Context, nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass) (map[string]interface{}, error) {
-	talosDefaults := r.Config.Talos
+	// Template variables will be populated from external sources (cluster credentials from user config)
+	// For now, we use placeholder values that users must replace in their machine config templates
+	
 	tailscaleDefaults := r.Config.Tailscale
 
 	// Build node labels
@@ -1102,7 +1104,6 @@ func (r *GPUNodePoolReconciler) getOAuthCredentials(ctx context.Context, ref *tg
 
 	return string(clientID), string(clientSecret), nil
 }
-
 
 // SetupWithManager sets up the controller with the Manager
 func (r *GPUNodePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {

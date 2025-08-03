@@ -382,8 +382,10 @@ type TalosConfig struct {
 	Image string `json:"image"`
 
 	// MachineConfigTemplate contains template for Talos machine configuration
-	// +optional
-	MachineConfigTemplate string `json:"machineConfigTemplate,omitempty"`
+	// This is required and must be a valid Talos machine configuration with template variables
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	MachineConfigTemplate string `json:"machineConfigTemplate"`
 
 	// KubeletImage specifies the kubelet image to use (defaults to GPU-optimized image)
 	// +optional

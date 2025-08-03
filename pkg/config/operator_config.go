@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -52,24 +53,6 @@ type ProviderConfig struct {
 type TalosDefaults struct {
 	// Image is the default Talos image to use
 	Image string `json:"image"`
-
-	// MachineToken is the token for machines to join the cluster
-	MachineToken string `json:"machineToken"`
-
-	// ClusterCA is the cluster CA certificate
-	ClusterCA string `json:"clusterCA"`
-
-	// ClusterID is the unique cluster identifier
-	ClusterID string `json:"clusterID"`
-
-	// ClusterSecret is the cluster secret for secure communication
-	ClusterSecret string `json:"clusterSecret"`
-
-	// ControlPlaneEndpoint is the endpoint for the control plane
-	ControlPlaneEndpoint string `json:"controlPlaneEndpoint"`
-
-	// ClusterName is the name of the cluster
-	ClusterName string `json:"clusterName"`
 }
 
 // TailscaleDefaults contains default Tailscale configuration
@@ -200,35 +183,3 @@ func DefaultConfig() *OperatorConfig {
 	}
 }
 
-// GetTalosClusterCredentials retrieves Talos cluster credentials from secrets if needed
-func (c *OperatorConfig) GetTalosClusterCredentials(ctx context.Context, client client.Client, operatorNamespace string) error {
-	// If all required fields are already set in config, no need to fetch from secrets
-	if c.Talos.MachineToken != "" && c.Talos.ClusterCA != "" &&
-		c.Talos.ClusterID != "" && c.Talos.ClusterSecret != "" &&
-		c.Talos.ControlPlaneEndpoint != "" && c.Talos.ClusterName != "" {
-		return nil
-	}
-
-	// TODO: In a production environment, these sensitive values should be loaded from secrets
-	// For now, we'll use placeholder values
-	if c.Talos.MachineToken == "" {
-		c.Talos.MachineToken = "placeholder-machine-token"
-	}
-	if c.Talos.ClusterCA == "" {
-		c.Talos.ClusterCA = "placeholder-cluster-ca"
-	}
-	if c.Talos.ClusterID == "" {
-		c.Talos.ClusterID = "default-cluster"
-	}
-	if c.Talos.ClusterSecret == "" {
-		c.Talos.ClusterSecret = "placeholder-cluster-secret"
-	}
-	if c.Talos.ControlPlaneEndpoint == "" {
-		c.Talos.ControlPlaneEndpoint = "https://kubernetes.default.svc:443"
-	}
-	if c.Talos.ClusterName == "" {
-		c.Talos.ClusterName = "talos-cluster"
-	}
-
-	return nil
-}

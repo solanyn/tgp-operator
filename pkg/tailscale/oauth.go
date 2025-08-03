@@ -209,4 +209,3 @@ func (c *Client) createAuthKey(ctx context.Context, token *oauth2.Token, tailnet
 
 	return authKeyResp.Key, nil
 }
-
