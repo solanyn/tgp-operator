@@ -541,18 +541,13 @@ func (r *GPUNodePoolReconciler) generateTalosMachineConfig(ctx context.Context, 
 	return config, nil
 }
 
-// getMachineConfigTemplate gets the Talos machine config template
+// getMachineConfigTemplate gets the Talos machine config template from secret
 func (r *GPUNodePoolReconciler) getMachineConfigTemplate(ctx context.Context, nodeClass *tgpv1.GPUNodeClass) (string, error) {
 	if nodeClass.Spec.TalosConfig == nil {
 		return r.getDefaultMachineConfigTemplate(), nil
 	}
 
-	// Use user-provided inline template if available
-	if nodeClass.Spec.TalosConfig.MachineConfigTemplate != "" {
-		return nodeClass.Spec.TalosConfig.MachineConfigTemplate, nil
-	}
-
-	// Use secret reference if provided
+	// Read template from secret reference (required)
 	if nodeClass.Spec.TalosConfig.MachineConfigSecretRef != nil {
 		template, err := r.getMachineConfigTemplateFromSecret(ctx, nodeClass.Spec.TalosConfig.MachineConfigSecretRef, nodeClass.Namespace)
 		if err != nil {
@@ -561,7 +556,7 @@ func (r *GPUNodePoolReconciler) getMachineConfigTemplate(ctx context.Context, no
 		return template, nil
 	}
 
-	// Return sensible default template
+	// Return sensible default template if no TalosConfig is provided
 	return r.getDefaultMachineConfigTemplate(), nil
 }
 

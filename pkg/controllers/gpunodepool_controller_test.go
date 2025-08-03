@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	tgpv1 "github.com/solanyn/tgp-operator/pkg/api/v1"
@@ -80,11 +81,11 @@ func TestBuildUserDataScript(t *testing.T) {
 			nodeClass: &tgpv1.GPUNodeClass{
 				Spec: tgpv1.GPUNodeClassSpec{
 					TalosConfig: &tgpv1.TalosConfig{
-						MachineConfigTemplate: `version: v1alpha1
-machine:
-  type: worker
-  token: {{.MachineToken}}
-  # Custom template for {{.NodePoolName}}`,
+						MachineConfigSecretRef: &tgpv1.SecretKeyRef{
+							Name:      "custom-talos-config",
+							Key:       "machine-config",
+							Namespace: "default",
+						},
 					},
 				},
 			},
@@ -112,7 +113,11 @@ machine:
 			nodeClass: &tgpv1.GPUNodeClass{
 				Spec: tgpv1.GPUNodeClassSpec{
 					TalosConfig: &tgpv1.TalosConfig{
-						MachineConfigTemplate: `invalid template {{.InvalidField`,
+						MachineConfigSecretRef: &tgpv1.SecretKeyRef{
+							Name:      "invalid-talos-config",
+							Key:       "machine-config",
+							Namespace: "default",
+						},
 					},
 				},
 			},
@@ -125,9 +130,39 @@ machine:
 		t.Run(tt.name, func(t *testing.T) {
 			scheme := runtime.NewScheme()
 			_ = tgpv1.AddToScheme(scheme)
+			_ = corev1.AddToScheme(scheme)
+
+			// Create test secrets
+			objects := []client.Object{}
+			if tt.nodeClass.Spec.TalosConfig != nil && tt.nodeClass.Spec.TalosConfig.MachineConfigSecretRef != nil {
+				secretRef := tt.nodeClass.Spec.TalosConfig.MachineConfigSecretRef
+				var templateContent string
+				
+				switch secretRef.Name {
+				case "custom-talos-config":
+					templateContent = `version: v1alpha1
+machine:
+  type: worker
+  token: {{.MachineToken}}
+  # Custom template for {{.NodePoolName}}`
+				case "invalid-talos-config":
+					templateContent = `invalid template {{.InvalidField`
+				}
+				
+				secret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      secretRef.Name,
+						Namespace: "default", // test namespace
+					},
+					Data: map[string][]byte{
+						secretRef.Key: []byte(templateContent),
+					},
+				}
+				objects = append(objects, secret)
+			}
 
 			reconciler := &GPUNodePoolReconciler{
-				Client: fake.NewClientBuilder().WithScheme(scheme).Build(),
+				Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build(),
 				Log:    logr.Discard(),
 				Config: tt.config,
 			}

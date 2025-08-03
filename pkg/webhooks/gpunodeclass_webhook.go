@@ -84,30 +84,14 @@ func (v *GPUNodeClassValidator) validateGPUNodeClass(nodeClass *tgpv1.GPUNodeCla
 
 // validateTalosConfig validates the TalosConfig
 func (v *GPUNodeClassValidator) validateTalosConfig(talosConfig *tgpv1.TalosConfig) error {
-	// Check that either MachineConfigTemplate or MachineConfigSecretRef is provided
-	hasTemplate := talosConfig.MachineConfigTemplate != ""
-	hasSecretRef := talosConfig.MachineConfigSecretRef != nil
-
-	if !hasTemplate && !hasSecretRef {
-		return fmt.Errorf("either machineConfigTemplate or machineConfigSecretRef must be provided")
+	// Check that MachineConfigSecretRef is provided
+	if talosConfig.MachineConfigSecretRef == nil {
+		return fmt.Errorf("machineConfigSecretRef is required")
 	}
 
-	if hasTemplate && hasSecretRef {
-		return fmt.Errorf("cannot specify both machineConfigTemplate and machineConfigSecretRef")
-	}
-
-	// Validate the template if provided inline
-	if hasTemplate {
-		if err := v.talosValidator.ValidateTemplate(talosConfig.MachineConfigTemplate); err != nil {
-			return fmt.Errorf("machine config template validation failed: %w", err)
-		}
-	}
-
-	// Validate the secret reference if provided
-	if hasSecretRef {
-		if err := v.validateSecretRef(talosConfig.MachineConfigSecretRef); err != nil {
-			return fmt.Errorf("invalid machine config secret reference: %w", err)
-		}
+	// Validate the secret reference
+	if err := v.validateSecretRef(talosConfig.MachineConfigSecretRef); err != nil {
+		return fmt.Errorf("invalid machine config secret reference: %w", err)
 	}
 
 	return nil

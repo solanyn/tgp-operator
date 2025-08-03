@@ -251,7 +251,6 @@ spec:
                     description: |-
                       MachineConfigSecretRef references a secret containing the machine config template
                       The secret must contain a key with the template data
-                      Either MachineConfigTemplate or MachineConfigSecretRef must be provided
                     properties:
                       key:
                         description: Key is the key within the secret
@@ -267,13 +266,9 @@ spec:
                     - key
                     - name
                     type: object
-                  machineConfigTemplate:
-                    description: |-
-                      MachineConfigTemplate contains template for Talos machine configuration
-                      Either MachineConfigTemplate or MachineConfigSecretRef must be provided
-                    type: string
                 required:
                 - image
+                - machineConfigSecretRef
                 type: object
             required:
             - providers

@@ -381,16 +381,10 @@ type TalosConfig struct {
 	// Image specifies the Talos image to use
 	Image string `json:"image"`
 
-	// MachineConfigTemplate contains template for Talos machine configuration
-	// Either MachineConfigTemplate or MachineConfigSecretRef must be provided
-	// +optional
-	MachineConfigTemplate string `json:"machineConfigTemplate,omitempty"`
-
 	// MachineConfigSecretRef references a secret containing the machine config template
 	// The secret must contain a key with the template data
-	// Either MachineConfigTemplate or MachineConfigSecretRef must be provided
-	// +optional
-	MachineConfigSecretRef *SecretKeyRef `json:"machineConfigSecretRef,omitempty"`
+	// +kubebuilder:validation:Required
+	MachineConfigSecretRef *SecretKeyRef `json:"machineConfigSecretRef"`
 
 	// KubeletImage specifies the kubelet image to use (defaults to GPU-optimized image)
 	// +optional
