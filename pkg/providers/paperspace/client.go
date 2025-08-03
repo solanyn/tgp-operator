@@ -3,7 +3,9 @@ package paperspace
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -25,6 +27,16 @@ const (
 	shuttingDownState = "shutting-down"
 	stateFailed       = "failed"
 )
+
+// customOSTemplateResponse represents a simplified OS template response that avoids union type issues
+type customOSTemplateResponse struct {
+	Items []struct {
+		AvailableMachineTypes []struct {
+			IsAvailable      bool   `json:"isAvailable"`
+			MachineTypeLabel string `json:"machineTypeLabel"`
+		} `json:"availableMachineTypes"`
+	} `json:"items"`
+}
 
 type Client struct {
 	*providers.BaseProvider
@@ -99,6 +111,41 @@ func (c *Client) TranslateRegion(standard string) (string, error) {
 	return standard, nil
 }
 
+// getOSTemplates makes a direct HTTP request to avoid union type unmarshaling issues
+func (c *Client) getOSTemplates(ctx context.Context) (*customOSTemplateResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.paperspace.com/v1/os_templates", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var result customOSTemplateResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
+}
+
 func (c *Client) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFilters) ([]providers.GPUOffer, error) {
 	if c.apiClient == nil || c.apiKey == fakeAPIKey {
 		// Return mock data when API client is not initialized (for testing)
@@ -118,19 +165,15 @@ func (c *Client) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFi
 		}, nil
 	}
 
-	// Get available machine types from Paperspace templates API
-	resp, err := c.apiClient.OsTemplatesListWithResponse(ctx, &api.OsTemplatesListParams{})
+	// Get available machine types from Paperspace templates API using custom request
+	resp, err := c.getOSTemplates(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list OS templates: %w", err)
 	}
 
-	if resp.JSON200 == nil {
-		return nil, fmt.Errorf("unexpected response from Paperspace API: %s", resp.Status())
-	}
-
 	// Extract unique machine types from all templates
 	machineTypeMap := make(map[string]bool)
-	for _, template := range resp.JSON200.Items {
+	for _, template := range resp.Items {
 		for _, machineType := range template.AvailableMachineTypes {
 			machineTypeMap[machineType.MachineTypeLabel] = true
 		}
