@@ -396,7 +396,7 @@ func (r *GPUNodePoolReconciler) extractGPURequirement(pod *corev1.Pod) (*GPURequ
 func (r *GPUNodePoolReconciler) selectBestProvider(ctx context.Context, nodeClass *tgpv1.GPUNodeClass, requirement *GPURequirement, log logr.Logger) (*tgpv1.ProviderConfig, providers.ProviderClient, error) {
 	var bestProvider *tgpv1.ProviderConfig
 	var bestClient providers.ProviderClient
-	var bestPrice float64 = float64(^uint(0) >> 1) // Max float64
+	bestPrice := float64(^uint(0) >> 1) // Max float64
 
 	// Evaluate each enabled provider
 	for _, providerConfig := range nodeClass.Spec.Providers {
@@ -521,7 +521,10 @@ func (r *GPUNodePoolReconciler) buildUserDataScript(ctx context.Context, nodePoo
 // generateTalosMachineConfig creates a Talos machine configuration for the node
 func (r *GPUNodePoolReconciler) generateTalosMachineConfig(ctx context.Context, nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass) (string, error) {
 	// Get the machine config template
-	template := r.getMachineConfigTemplate(nodeClass)
+	template, err := r.getMachineConfigTemplate(ctx, nodeClass)
+	if err != nil {
+		return "", fmt.Errorf("failed to get machine config template: %w", err)
+	}
 
 	// Create template variables for substitution
 	templateVars, err := r.buildTemplateVariables(ctx, nodePool, nodeClass)
@@ -539,14 +542,55 @@ func (r *GPUNodePoolReconciler) generateTalosMachineConfig(ctx context.Context, 
 }
 
 // getMachineConfigTemplate gets the Talos machine config template
-func (r *GPUNodePoolReconciler) getMachineConfigTemplate(nodeClass *tgpv1.GPUNodeClass) string {
-	// Use user-provided template if available
-	if nodeClass.Spec.TalosConfig != nil && nodeClass.Spec.TalosConfig.MachineConfigTemplate != "" {
-		return nodeClass.Spec.TalosConfig.MachineConfigTemplate
+func (r *GPUNodePoolReconciler) getMachineConfigTemplate(ctx context.Context, nodeClass *tgpv1.GPUNodeClass) (string, error) {
+	if nodeClass.Spec.TalosConfig == nil {
+		return r.getDefaultMachineConfigTemplate(), nil
+	}
+
+	// Use user-provided inline template if available
+	if nodeClass.Spec.TalosConfig.MachineConfigTemplate != "" {
+		return nodeClass.Spec.TalosConfig.MachineConfigTemplate, nil
+	}
+
+	// Use secret reference if provided
+	if nodeClass.Spec.TalosConfig.MachineConfigSecretRef != nil {
+		template, err := r.getMachineConfigTemplateFromSecret(ctx, nodeClass.Spec.TalosConfig.MachineConfigSecretRef, nodeClass.Namespace)
+		if err != nil {
+			return "", fmt.Errorf("failed to read machine config template from secret: %w", err)
+		}
+		return template, nil
 	}
 
 	// Return sensible default template
-	return r.getDefaultMachineConfigTemplate()
+	return r.getDefaultMachineConfigTemplate(), nil
+}
+
+// getMachineConfigTemplateFromSecret reads the machine config template from a Kubernetes secret
+func (r *GPUNodePoolReconciler) getMachineConfigTemplateFromSecret(ctx context.Context, secretRef *tgpv1.SecretKeyRef, defaultNamespace string) (string, error) {
+	// Determine the namespace - use secretRef.Namespace if provided, otherwise use defaultNamespace
+	namespace := secretRef.Namespace
+	if namespace == "" {
+		namespace = defaultNamespace
+	}
+
+	// Get the secret
+	secret := &corev1.Secret{}
+	secretKey := types.NamespacedName{
+		Name:      secretRef.Name,
+		Namespace: namespace,
+	}
+
+	if err := r.Get(ctx, secretKey, secret); err != nil {
+		return "", fmt.Errorf("failed to get secret %s/%s: %w", namespace, secretRef.Name, err)
+	}
+
+	// Get the template data from the secret
+	templateData, exists := secret.Data[secretRef.Key]
+	if !exists {
+		return "", fmt.Errorf("key %s not found in secret %s/%s", secretRef.Key, namespace, secretRef.Name)
+	}
+
+	return string(templateData), nil
 }
 
 // getDefaultMachineConfigTemplate returns a default Talos machine configuration template
@@ -719,8 +763,9 @@ cluster:
 func (r *GPUNodePoolReconciler) buildTemplateVariables(ctx context.Context, nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass) (map[string]interface{}, error) {
 	// Template variables will be populated from external sources (cluster credentials from user config)
 	// For now, we use placeholder values that users must replace in their machine config templates
-	
+
 	tailscaleDefaults := r.Config.Tailscale
+	talosDefaults := r.Config.Talos
 
 	// Build node labels
 	nodeLabels := make(map[string]string)
@@ -736,13 +781,14 @@ func (r *GPUNodePoolReconciler) buildTemplateVariables(ctx context.Context, node
 
 	// Build template variables
 	vars := map[string]interface{}{
-		// Talos cluster configuration
-		"MachineToken":         talosDefaults.MachineToken,
-		"ClusterCA":            talosDefaults.ClusterCA,
-		"ClusterID":            talosDefaults.ClusterID,
-		"ClusterSecret":        talosDefaults.ClusterSecret,
-		"ControlPlaneEndpoint": talosDefaults.ControlPlaneEndpoint,
-		"ClusterName":          talosDefaults.ClusterName,
+		// Talos cluster configuration (these are provided by the user in their machine config templates)
+		// These are placeholder values - users must provide actual cluster values in their templates
+		"MachineToken":         "{{.MachineToken}}",
+		"ClusterCA":            "{{.ClusterCA}}",
+		"ClusterID":            "{{.ClusterID}}",
+		"ClusterSecret":        "{{.ClusterSecret}}",
+		"ControlPlaneEndpoint": "{{.ControlPlaneEndpoint}}",
+		"ClusterName":          "{{.ClusterName}}",
 		"TalosImage":           talosDefaults.Image,
 		"KubeletImage":         getKubeletImage(nodeClass),
 

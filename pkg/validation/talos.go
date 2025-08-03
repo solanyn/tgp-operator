@@ -134,11 +134,11 @@ func (v *TalosConfigValidator) getVariableVariants(variable string) []string {
 	// Handle different template syntaxes like {{.Var}}, {{ .Var }}, etc.
 	base := variable[2 : len(variable)-2] // Remove {{ and }}
 	return []string{
-		variable,                    // {{.Var}}
-		"{{ " + base + " }}",       // {{ .Var }}
-		"{{" + base + "}}",         // Remove spaces if any
-		"{{ " + base + "}}",        // Space before
-		"{{" + base + " }}",        // Space after
+		variable,             // {{.Var}}
+		"{{ " + base + " }}", // {{ .Var }}
+		"{{" + base + "}}",   // Remove spaces if any
+		"{{ " + base + "}}",  // Space before
+		"{{" + base + " }}",  // Space after
 	}
 }
 

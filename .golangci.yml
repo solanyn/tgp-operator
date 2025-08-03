@@ -1,6 +1,8 @@
 # golangci-lint configuration for tgp-operator
 # Minimal configuration for maximum compatibility
 
+version: 2
+
 run:
   timeout: 5m
   go: '1.24'
@@ -20,14 +22,9 @@ linters:
   disable-all: true
   enable:
     - errcheck
-    - gofmt
-    - goimports
-    - gosimple
     - govet
     - ineffassign
-    - misspell
     - staticcheck
-    - typecheck
     - unused
 
 issues:

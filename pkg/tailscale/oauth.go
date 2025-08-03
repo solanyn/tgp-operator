@@ -143,7 +143,7 @@ func (c *Client) getTailnet(ctx context.Context, token *oauth2.Token) (string, e
 	if err != nil {
 		return "", fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("API request failed with status %d", resp.StatusCode)
@@ -196,7 +196,7 @@ func (c *Client) createAuthKey(ctx context.Context, token *oauth2.Token, tailnet
 	if err != nil {
 		return "", fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return "", fmt.Errorf("API request failed with status %d", resp.StatusCode)

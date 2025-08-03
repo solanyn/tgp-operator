@@ -28,6 +28,8 @@ machine:
   files:
     - path: /etc/tailscale/auth
       content: {{.TailscaleAuthKey}}
+  nodeLabels:
+    hostname: {{.NodeName}}
 cluster:
   id: {{.ClusterID}}
   secret: {{.ClusterSecret}}
@@ -81,7 +83,7 @@ cluster:
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validator.ValidateTemplate(tt.template)
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("ValidateTemplate() expected error but got none")
@@ -114,6 +116,8 @@ machine:
   token: {{.MachineToken}}
   ca:
     crt: {{.ClusterCA}}
+  nodeLabels:
+    hostname: {{.NodeName}}
 cluster:
   id: {{.ClusterID}}
   secret: {{.ClusterSecret}}
@@ -148,6 +152,8 @@ machine:
   token: {{ .MachineToken }}
   ca:
     crt: {{.ClusterCA}}
+  nodeLabels:
+    hostname: {{ .NodeName }}
 cluster:
   id: {{ .ClusterID}}
   secret: {{.ClusterSecret }}
@@ -178,7 +184,7 @@ func TestTalosConfigValidator_CreateDummyTemplateData(t *testing.T) {
 
 	requiredKeys := []string{
 		"ControlPlaneEndpoint",
-		"MachineToken", 
+		"MachineToken",
 		"ClusterCA",
 		"ClusterID",
 		"ClusterSecret",

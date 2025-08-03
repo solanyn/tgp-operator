@@ -123,7 +123,7 @@ func TestGPUNodeClassReconciler_handleDeletion(t *testing.T) {
 		t.Fatalf("Reconcile failed: %v", err)
 	}
 
-	if result.Requeue || result.RequeueAfter > 0 {
+	if result.RequeueAfter > 0 {
 		t.Error("Expected no requeue for successful deletion")
 	}
 

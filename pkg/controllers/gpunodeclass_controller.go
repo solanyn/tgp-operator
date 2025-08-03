@@ -299,8 +299,8 @@ func (r *GPUNodeClassReconciler) updateGPUAvailability(ctx context.Context, node
 		r.updateProviderCondition(nodeClass, providerName, metav1.ConditionTrue, "Ready", "Provider credentials validated and client ready")
 
 		// Apply rate limiting to avoid hitting API limits
-		if err := r.rateLimitProvider(providerName); err != nil {
-			providerStatus.Error = fmt.Sprintf("Rate limited: %v", err)
+		if rateLimitErr := r.rateLimitProvider(providerName); rateLimitErr != nil {
+			providerStatus.Error = fmt.Sprintf("Rate limited: %v", rateLimitErr)
 			providerStatuses[providerName] = providerStatus
 			log.V(1).Info("Provider rate limited, skipping this cycle", "provider", providerName)
 			continue

@@ -49,25 +49,21 @@ func TestBuildUserDataScript(t *testing.T) {
 			},
 			config: &config.OperatorConfig{
 				Talos: config.TalosDefaults{
-					MachineToken:         "test-token",
-					ClusterCA:            "test-ca",
-					ClusterID:            "test-cluster-id",
-					ControlPlaneEndpoint: "https://control-plane:6443",
-					ClusterName:          "test-cluster",
+					Image: "ghcr.io/siderolabs/talos:v1.10.5",
 				},
 			},
 			validate: func(t *testing.T, result string) {
-				// Verify critical cluster credentials are substituted
-				if !contains(result, "test-token") {
-					t.Error("machine token not substituted")
+				// Since template variables are now user-provided, verify basic template generation
+				if !contains(result, "{{.MachineToken}}") {
+					t.Error("machine token template variable not found")
 				}
-				if !contains(result, "test-ca") {
-					t.Error("cluster CA not substituted")
+				if !contains(result, "{{.ClusterCA}}") {
+					t.Error("cluster CA template variable not found")
 				}
-				if !contains(result, "https://control-plane:6443") {
-					t.Error("control plane endpoint not substituted")
+				if !contains(result, "{{.ControlPlaneEndpoint}}") {
+					t.Error("control plane endpoint template variable not found")
 				}
-				// Verify node-specific configuration
+				// Verify node-specific configuration is still substituted
 				if !contains(result, "gpu-tier=high-end") {
 					t.Error("node labels not included")
 				}
@@ -93,11 +89,11 @@ machine:
 				},
 			},
 			config: &config.OperatorConfig{
-				Talos: config.TalosDefaults{MachineToken: "custom-token"},
+				Talos: config.TalosDefaults{Image: "ghcr.io/siderolabs/talos:v1.10.5"},
 			},
 			validate: func(t *testing.T, result string) {
-				if !contains(result, "custom-token") {
-					t.Error("custom template token not substituted")
+				if !contains(result, "{{.MachineToken}}") {
+					t.Error("custom template token variable not found")
 				}
 				if !contains(result, "# Custom template for custom-pool") {
 					t.Error("custom template not used")

@@ -239,32 +239,6 @@ func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchReques
 	}, nil
 }
 
-// mapGPUTypeToMachineType maps standard GPU types to Paperspace machine types
-func (c *Client) mapGPUTypeToMachineType(gpuType string) (string, error) {
-	gpuTypeLower := strings.ToLower(gpuType)
-
-	switch {
-	case strings.Contains(gpuTypeLower, "rtx4000"):
-		return "C5", nil
-	case strings.Contains(gpuTypeLower, "rtx5000"):
-		return "C6", nil
-	case strings.Contains(gpuTypeLower, "rtxa6000"), strings.Contains(gpuTypeLower, "a6000"):
-		return "C7", nil
-	case strings.Contains(gpuTypeLower, "a100"):
-		return "C8", nil
-	case strings.Contains(gpuTypeLower, "v100"):
-		return "V100", nil
-	case strings.Contains(gpuTypeLower, "p4000"):
-		return "P4000", nil
-	case strings.Contains(gpuTypeLower, "p5000"):
-		return "P5000", nil
-	case strings.Contains(gpuTypeLower, "p6000"):
-		return "P6000", nil
-	default:
-		return "", fmt.Errorf("unsupported GPU type: %s", gpuType)
-	}
-}
-
 func (c *Client) GetInstanceStatus(ctx context.Context, instanceID string) (*providers.InstanceStatus, error) {
 	if c.apiClient == nil {
 		// Return mock data when API client is not initialized (for testing)
@@ -332,12 +306,6 @@ func (c *Client) TerminateInstance(ctx context.Context, instanceID string) error
 	}
 
 	return nil
-}
-
-// matchesGPUType checks if a machine type matches the requested GPU type
-func (c *Client) matchesGPUType(machineType, gpuType string) bool {
-	// Simple string matching for now - could be enhanced with better mapping
-	return strings.Contains(strings.ToLower(machineType), strings.ToLower(gpuType))
 }
 
 // getHourlyPrice returns estimated hourly price for a machine type

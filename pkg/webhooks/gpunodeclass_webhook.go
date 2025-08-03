@@ -3,7 +3,6 @@ package webhooks
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -85,16 +84,43 @@ func (v *GPUNodeClassValidator) validateGPUNodeClass(nodeClass *tgpv1.GPUNodeCla
 
 // validateTalosConfig validates the TalosConfig
 func (v *GPUNodeClassValidator) validateTalosConfig(talosConfig *tgpv1.TalosConfig) error {
-	// Check that MachineConfigTemplate is provided
-	if talosConfig.MachineConfigTemplate == "" {
-		return fmt.Errorf("machineConfigTemplate is required")
+	// Check that either MachineConfigTemplate or MachineConfigSecretRef is provided
+	hasTemplate := talosConfig.MachineConfigTemplate != ""
+	hasSecretRef := talosConfig.MachineConfigSecretRef != nil
+
+	if !hasTemplate && !hasSecretRef {
+		return fmt.Errorf("either machineConfigTemplate or machineConfigSecretRef must be provided")
 	}
 
-	// Validate the template using our Talos validator
-	if err := v.talosValidator.ValidateTemplate(talosConfig.MachineConfigTemplate); err != nil {
-		return fmt.Errorf("machine config template validation failed: %w", err)
+	if hasTemplate && hasSecretRef {
+		return fmt.Errorf("cannot specify both machineConfigTemplate and machineConfigSecretRef")
 	}
 
+	// Validate the template if provided inline
+	if hasTemplate {
+		if err := v.talosValidator.ValidateTemplate(talosConfig.MachineConfigTemplate); err != nil {
+			return fmt.Errorf("machine config template validation failed: %w", err)
+		}
+	}
+
+	// Validate the secret reference if provided
+	if hasSecretRef {
+		if err := v.validateSecretRef(talosConfig.MachineConfigSecretRef); err != nil {
+			return fmt.Errorf("invalid machine config secret reference: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// validateSecretRef validates a secret reference
+func (v *GPUNodeClassValidator) validateSecretRef(secretRef *tgpv1.SecretKeyRef) error {
+	if secretRef.Name == "" {
+		return fmt.Errorf("secret name cannot be empty")
+	}
+	if secretRef.Key == "" {
+		return fmt.Errorf("secret key cannot be empty")
+	}
 	return nil
 }
 
@@ -106,7 +132,7 @@ func (v *GPUNodeClassValidator) validateProviders(providers []tgpv1.ProviderConf
 
 	enabledCount := 0
 	for _, provider := range providers {
-		if provider.Enabled {
+		if provider.Enabled != nil && *provider.Enabled {
 			enabledCount++
 		}
 
