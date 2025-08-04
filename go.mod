@@ -6,8 +6,8 @@ require (
 	github.com/Khan/genqlient v0.8.1
 	github.com/go-logr/logr v1.4.3
 	github.com/oapi-codegen/runtime v1.1.2
-	github.com/prometheus/client_golang v1.22.0
-	golang.org/x/oauth2 v0.27.0
+	github.com/prometheus/client_golang v1.23.0
+	golang.org/x/oauth2 v0.30.0
 	golang.org/x/time v0.12.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.33.3
@@ -44,9 +44,9 @@ require (
 	github.com/onsi/ginkgo/v2 v2.23.3 // indirect
 	github.com/onsi/gomega v1.37.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/prometheus/client_model v0.6.1 // indirect
-	github.com/prometheus/common v0.62.0 // indirect
-	github.com/prometheus/procfs v0.15.1 // indirect
+	github.com/prometheus/client_model v0.6.2 // indirect
+	github.com/prometheus/common v0.65.0 // indirect
+	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.19 // indirect
