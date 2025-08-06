@@ -34,14 +34,20 @@ type ProviderConfig struct {
 	// Enabled indicates whether this provider is available
 	Enabled bool `json:"enabled"`
 
-	// SecretName is the name of the secret containing API credentials
-	SecretName string `json:"secretName"`
+	// CredentialsRef references the secret containing API credentials
+	CredentialsRef SecretReference `json:"credentialsRef"`
+}
 
-	// SecretNamespace is the namespace of the secret (defaults to operator namespace)
-	SecretNamespace string `json:"secretNamespace,omitempty"`
+// SecretReference contains a reference to a secret and key
+type SecretReference struct {
+	// Name is the name of the secret
+	Name string `json:"name"`
 
-	// APIKeySecretKey is the key in the secret containing the API key
-	APIKeySecretKey string `json:"apiKeySecretKey"`
+	// Namespace is the namespace of the secret (defaults to operator namespace)
+	Namespace string `json:"namespace,omitempty"`
+
+	// Key is the key in the secret containing the value
+	Key string `json:"key"`
 }
 
 // TalosDefaults contains default Talos configuration
@@ -61,11 +67,17 @@ type TailscaleDefaults struct {
 	// AcceptRoutes indicates whether to accept routes by default
 	AcceptRoutes bool `json:"acceptRoutes"`
 
-	// OAuthSecretName is the name of the secret containing OAuth credentials
-	OAuthSecretName string `json:"oauthSecretName"`
+	// OAuthCredentialsRef references the secret containing OAuth credentials
+	OAuthCredentialsRef OAuthSecretReference `json:"oauthCredentialsRef"`
+}
 
-	// OAuthSecretNamespace is the namespace of the OAuth secret
-	OAuthSecretNamespace string `json:"oauthSecretNamespace,omitempty"`
+// OAuthSecretReference contains references to OAuth client ID and secret
+type OAuthSecretReference struct {
+	// Name is the name of the secret
+	Name string `json:"name"`
+
+	// Namespace is the namespace of the secret (defaults to operator namespace)
+	Namespace string `json:"namespace,omitempty"`
 
 	// ClientIDKey is the key containing the OAuth client ID
 	ClientIDKey string `json:"clientIdKey"`
@@ -91,23 +103,23 @@ func (c *OperatorConfig) GetProviderCredentials(ctx context.Context, client clie
 		return "", fmt.Errorf("provider %s is not enabled", provider)
 	}
 
-	secretNamespace := providerConfig.SecretNamespace
+	secretNamespace := providerConfig.CredentialsRef.Namespace
 	if secretNamespace == "" {
 		secretNamespace = operatorNamespace
 	}
 
 	secret := &corev1.Secret{}
 	err := client.Get(ctx, types.NamespacedName{
-		Name:      providerConfig.SecretName,
+		Name:      providerConfig.CredentialsRef.Name,
 		Namespace: secretNamespace,
 	}, secret)
 	if err != nil {
-		return "", fmt.Errorf("failed to get provider secret %s/%s: %w", secretNamespace, providerConfig.SecretName, err)
+		return "", fmt.Errorf("failed to get provider secret %s/%s: %w", secretNamespace, providerConfig.CredentialsRef.Name, err)
 	}
 
-	apiKey, exists := secret.Data[providerConfig.APIKeySecretKey]
+	apiKey, exists := secret.Data[providerConfig.CredentialsRef.Key]
 	if !exists {
-		return "", fmt.Errorf("API key %s not found in secret %s/%s", providerConfig.APIKeySecretKey, secretNamespace, providerConfig.SecretName)
+		return "", fmt.Errorf("API key %s not found in secret %s/%s", providerConfig.CredentialsRef.Key, secretNamespace, providerConfig.CredentialsRef.Name)
 	}
 
 	return string(apiKey), nil
@@ -115,28 +127,28 @@ func (c *OperatorConfig) GetProviderCredentials(ctx context.Context, client clie
 
 // GetTailscaleOAuthCredentials retrieves Tailscale OAuth credentials
 func (c *OperatorConfig) GetTailscaleOAuthCredentials(ctx context.Context, client client.Client, operatorNamespace string) (clientID, clientSecret string, err error) {
-	secretNamespace := c.Tailscale.OAuthSecretNamespace
+	secretNamespace := c.Tailscale.OAuthCredentialsRef.Namespace
 	if secretNamespace == "" {
 		secretNamespace = operatorNamespace
 	}
 
 	secret := &corev1.Secret{}
 	err = client.Get(ctx, types.NamespacedName{
-		Name:      c.Tailscale.OAuthSecretName,
+		Name:      c.Tailscale.OAuthCredentialsRef.Name,
 		Namespace: secretNamespace,
 	}, secret)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to get Tailscale OAuth secret %s/%s: %w", secretNamespace, c.Tailscale.OAuthSecretName, err)
+		return "", "", fmt.Errorf("failed to get Tailscale OAuth secret %s/%s: %w", secretNamespace, c.Tailscale.OAuthCredentialsRef.Name, err)
 	}
 
-	clientIDBytes, exists := secret.Data[c.Tailscale.ClientIDKey]
+	clientIDBytes, exists := secret.Data[c.Tailscale.OAuthCredentialsRef.ClientIDKey]
 	if !exists {
-		return "", "", fmt.Errorf("client ID key %s not found in secret %s/%s", c.Tailscale.ClientIDKey, secretNamespace, c.Tailscale.OAuthSecretName)
+		return "", "", fmt.Errorf("client ID key %s not found in secret %s/%s", c.Tailscale.OAuthCredentialsRef.ClientIDKey, secretNamespace, c.Tailscale.OAuthCredentialsRef.Name)
 	}
 
-	clientSecretBytes, exists := secret.Data[c.Tailscale.ClientSecretKey]
+	clientSecretBytes, exists := secret.Data[c.Tailscale.OAuthCredentialsRef.ClientSecretKey]
 	if !exists {
-		return "", "", fmt.Errorf("client secret key %s not found in secret %s/%s", c.Tailscale.ClientSecretKey, secretNamespace, c.Tailscale.OAuthSecretName)
+		return "", "", fmt.Errorf("client secret key %s not found in secret %s/%s", c.Tailscale.OAuthCredentialsRef.ClientSecretKey, secretNamespace, c.Tailscale.OAuthCredentialsRef.Name)
 	}
 
 	return string(clientIDBytes), string(clientSecretBytes), nil
@@ -146,22 +158,33 @@ func (c *OperatorConfig) GetTailscaleOAuthCredentials(ctx context.Context, clien
 func DefaultConfig() *OperatorConfig {
 	return &OperatorConfig{
 		Providers: ProvidersConfig{
+			Vultr: ProviderConfig{
+				Enabled: false,
+				CredentialsRef: SecretReference{
+					Name: "tgp-operator-secret",
+					Key:  "VULTR_API_KEY",
+				},
+			},
 			GCP: ProviderConfig{
-				Enabled:         true,
-				SecretName:      "tgp-operator-secret",
-				APIKeySecretKey: "GOOGLE_APPLICATION_CREDENTIALS_JSON",
+				Enabled: false,
+				CredentialsRef: SecretReference{
+					Name: "tgp-operator-secret",
+					Key:  "GOOGLE_APPLICATION_CREDENTIALS_JSON",
+				},
 			},
 		},
 		Talos: TalosDefaults{
 			Image: "ghcr.io/siderolabs/talos:v1.10.5",
 		},
 		Tailscale: TailscaleDefaults{
-			Tags:            []string{"tag:k8s", "tag:gpu"},
-			Ephemeral:       true,
-			AcceptRoutes:    true,
-			OAuthSecretName: "tgp-operator-secret",
-			ClientIDKey:     "client-id",
-			ClientSecretKey: "client-secret",
+			Tags:         []string{"tag:k8s", "tag:gpu"},
+			Ephemeral:    true,
+			AcceptRoutes: true,
+			OAuthCredentialsRef: OAuthSecretReference{
+				Name:            "tgp-operator-secret",
+				ClientIDKey:     "client-id",
+				ClientSecretKey: "client-secret",
+			},
 		},
 	}
 }

@@ -9,20 +9,22 @@ metadata:
 data:
   config.yaml: |
     providers:
-      runpod:
-        enabled: {{ .Values.config.providers.runpod.enabled | default true }}
-        secretName: {{ .Values.config.providers.runpod.secretName | default "tgp-operator-secret" }}
-        {{- if .Values.config.providers.runpod.secretNamespace }}
-        secretNamespace: {{ .Values.config.providers.runpod.secretNamespace }}
-        {{- end }}
-        apiKeySecretKey: {{ .Values.config.providers.runpod.apiKeySecretKey | default "RUNPOD_API_KEY" }}
-      lambdaLabs:
-        enabled: {{ .Values.config.providers.lambdaLabs.enabled | default true }}
-        secretName: {{ .Values.config.providers.lambdaLabs.secretName | default "tgp-operator-secret" }}
-        {{- if .Values.config.providers.lambdaLabs.secretNamespace }}
-        secretNamespace: {{ .Values.config.providers.lambdaLabs.secretNamespace }}
-        {{- end }}
-        apiKeySecretKey: {{ .Values.config.providers.lambdaLabs.apiKeySecretKey | default "LAMBDA_LABS_API_KEY" }}
+      vultr:
+        enabled: {{ .Values.config.providers.vultr.enabled | default false }}
+        credentialsRef:
+          name: {{ .Values.config.providers.vultr.credentialsRef.name | default "tgp-operator-secret" }}
+          {{- if .Values.config.providers.vultr.credentialsRef.namespace }}
+          namespace: {{ .Values.config.providers.vultr.credentialsRef.namespace }}
+          {{- end }}
+          key: {{ .Values.config.providers.vultr.credentialsRef.key | default "VULTR_API_KEY" }}
+      gcp:
+        enabled: {{ .Values.config.providers.gcp.enabled | default false }}
+        credentialsRef:
+          name: {{ .Values.config.providers.gcp.credentialsRef.name | default "tgp-operator-secret" }}
+          {{- if .Values.config.providers.gcp.credentialsRef.namespace }}
+          namespace: {{ .Values.config.providers.gcp.credentialsRef.namespace }}
+          {{- end }}
+          key: {{ .Values.config.providers.gcp.credentialsRef.key | default "GOOGLE_APPLICATION_CREDENTIALS_JSON" }}
     talos:
       image: {{ .Values.config.talos.image | default "ghcr.io/siderolabs/talos:v1.10.5" }}
     tailscale:
@@ -32,10 +34,11 @@ data:
         {{- end }}
       ephemeral: {{ .Values.config.tailscale.ephemeral | default true }}
       acceptRoutes: {{ .Values.config.tailscale.acceptRoutes | default true }}
-      oauthSecretName: {{ .Values.config.tailscale.oauthSecretName | default "tgp-operator-secret" }}
-      {{- if .Values.config.tailscale.oauthSecretNamespace }}
-      oauthSecretNamespace: {{ .Values.config.tailscale.oauthSecretNamespace }}
-      {{- end }}
-      clientIdKey: {{ .Values.config.tailscale.clientIdKey | default "client-id" }}
-      clientSecretKey: {{ .Values.config.tailscale.clientSecretKey | default "client-secret" }}
+      oauthCredentialsRef:
+        name: {{ .Values.config.tailscale.oauthCredentialsRef.name | default "tgp-operator-secret" }}
+        {{- if .Values.config.tailscale.oauthCredentialsRef.namespace }}
+        namespace: {{ .Values.config.tailscale.oauthCredentialsRef.namespace }}
+        {{- end }}
+        clientIdKey: {{ .Values.config.tailscale.oauthCredentialsRef.clientIdKey | default "client-id" }}
+        clientSecretKey: {{ .Values.config.tailscale.oauthCredentialsRef.clientSecretKey | default "client-secret" }}
 {{- end }}
