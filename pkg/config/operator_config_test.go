@@ -34,10 +34,12 @@ func TestOperatorConfig_GetProviderCredentials(t *testing.T) {
 	config := &OperatorConfig{
 		Providers: ProvidersConfig{
 			GCP: ProviderConfig{
-				Enabled:         true,
-				SecretName:      "test-secret",
-				SecretNamespace: "test-namespace",
-				APIKeySecretKey: "GOOGLE_APPLICATION_CREDENTIALS_JSON",
+				Enabled: true,
+				CredentialsRef: SecretReference{
+					Name:      "test-secret",
+					Namespace: "test-namespace",
+					Key:       "GOOGLE_APPLICATION_CREDENTIALS_JSON",
+				},
 			},
 		},
 	}
@@ -91,10 +93,12 @@ func TestOperatorConfig_GetTailscaleOAuthCredentials(t *testing.T) {
 
 	config := &OperatorConfig{
 		Tailscale: TailscaleDefaults{
-			OAuthSecretName:      "tailscale-secret",
-			OAuthSecretNamespace: "test-namespace",
-			ClientIDKey:          "client-id",
-			ClientSecretKey:      "client-secret",
+			OAuthCredentialsRef: OAuthSecretReference{
+				Name:            "tailscale-secret",
+				Namespace:       "test-namespace",
+				ClientIDKey:     "client-id",
+				ClientSecretKey: "client-secret",
+			},
 		},
 	}
 
@@ -118,18 +122,18 @@ func TestDefaultConfig(t *testing.T) {
 	config := DefaultConfig()
 
 	t.Run("should have GCP provider configuration", func(t *testing.T) {
-		if !config.Providers.GCP.Enabled {
-			t.Error("GCP should be enabled by default")
+		if config.Providers.GCP.Enabled {
+			t.Error("GCP should be disabled by default")
 		}
 		
 		expectedSecretName := "tgp-operator-secret"
-		if config.Providers.GCP.SecretName != expectedSecretName {
-			t.Errorf("Expected secret name '%s', got: %s", expectedSecretName, config.Providers.GCP.SecretName)
+		if config.Providers.GCP.CredentialsRef.Name != expectedSecretName {
+			t.Errorf("Expected secret name '%s', got: %s", expectedSecretName, config.Providers.GCP.CredentialsRef.Name)
 		}
 		
 		expectedAPIKey := "GOOGLE_APPLICATION_CREDENTIALS_JSON"
-		if config.Providers.GCP.APIKeySecretKey != expectedAPIKey {
-			t.Errorf("Expected API key '%s', got: %s", expectedAPIKey, config.Providers.GCP.APIKeySecretKey)
+		if config.Providers.GCP.CredentialsRef.Key != expectedAPIKey {
+			t.Errorf("Expected API key '%s', got: %s", expectedAPIKey, config.Providers.GCP.CredentialsRef.Key)
 		}
 	})
 
