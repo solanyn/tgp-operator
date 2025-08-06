@@ -75,6 +75,12 @@ func main() {
 		operatorConfig = config.DefaultConfig()
 	} else {
 		setupLog.Info("loaded operator configuration from ConfigMap", "namespace", operatorNamespace)
+		// Debug: Log loaded configuration details
+		setupLog.Info("configuration loaded", 
+			"vultr.enabled", operatorConfig.Providers.Vultr.Enabled,
+			"gcp.enabled", operatorConfig.Providers.GCP.Enabled,
+			"vultr.secret", operatorConfig.Providers.Vultr.CredentialsRef.Name,
+		)
 	}
 
 	// Setup GPUNodeClass controller
