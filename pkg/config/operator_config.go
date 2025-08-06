@@ -13,78 +13,78 @@ import (
 // OperatorConfig contains centralized configuration for the TGP operator
 type OperatorConfig struct {
 	// Providers contains configuration for all cloud providers
-	Providers ProvidersConfig `json:"providers"`
+	Providers ProvidersConfig `yaml:"providers" json:"providers"`
 
 	// Talos contains default Talos configuration
-	Talos TalosDefaults `json:"talos"`
+	Talos TalosDefaults `yaml:"talos" json:"talos"`
 
 	// Tailscale contains Tailscale mesh networking configuration
-	Tailscale TailscaleDefaults `json:"tailscale"`
+	Tailscale TailscaleDefaults `yaml:"tailscale" json:"tailscale"`
 }
 
 // ProvidersConfig contains configuration for all cloud providers
 type ProvidersConfig struct {
 	// Vultr contains Vultr provider configuration
-	Vultr ProviderConfig `json:"vultr"`
+	Vultr ProviderConfig `yaml:"vultr" json:"vultr"`
 	// GCP contains Google Cloud Platform provider configuration
-	GCP ProviderConfig `json:"gcp"`
+	GCP ProviderConfig `yaml:"gcp" json:"gcp"`
 }
 
 // ProviderConfig contains configuration for a single cloud provider
 type ProviderConfig struct {
 	// Enabled indicates whether this provider is available
-	Enabled bool `json:"enabled"`
+	Enabled bool `yaml:"enabled" json:"enabled"`
 
 	// CredentialsRef references the secret containing API credentials
-	CredentialsRef SecretReference `json:"credentialsRef"`
+	CredentialsRef SecretReference `yaml:"credentialsRef" json:"credentialsRef"`
 }
 
 // SecretReference contains a reference to a secret and key
 type SecretReference struct {
 	// Name is the name of the secret
-	Name string `json:"name"`
+	Name string `yaml:"name" json:"name"`
 
 	// Namespace is the namespace of the secret (defaults to operator namespace)
-	Namespace string `json:"namespace,omitempty"`
+	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// Key is the key in the secret containing the value
-	Key string `json:"key"`
+	Key string `yaml:"key" json:"key"`
 }
 
 // TalosDefaults contains default Talos configuration
 type TalosDefaults struct {
 	// Image is the default Talos image to use
-	Image string `json:"image"`
+	Image string `yaml:"image" json:"image"`
 }
 
 // TailscaleDefaults contains default Tailscale configuration
 type TailscaleDefaults struct {
 	// Tags are the default tags to apply to devices
-	Tags []string `json:"tags"`
+	Tags []string `yaml:"tags" json:"tags"`
 
 	// Ephemeral indicates whether devices should be ephemeral by default
-	Ephemeral bool `json:"ephemeral"`
+	Ephemeral bool `yaml:"ephemeral" json:"ephemeral"`
 
 	// AcceptRoutes indicates whether to accept routes by default
-	AcceptRoutes bool `json:"acceptRoutes"`
+	AcceptRoutes bool `yaml:"acceptRoutes" json:"acceptRoutes"`
 
 	// OAuthCredentialsRef references the secret containing OAuth credentials
-	OAuthCredentialsRef OAuthSecretReference `json:"oauthCredentialsRef"`
+	OAuthCredentialsRef OAuthSecretReference `yaml:"oauthCredentialsRef" json:"oauthCredentialsRef"`
 }
 
 // OAuthSecretReference contains references to OAuth client ID and secret
 type OAuthSecretReference struct {
 	// Name is the name of the secret
-	Name string `json:"name"`
+	Name string `yaml:"name" json:"name"`
 
 	// Namespace is the namespace of the secret (defaults to operator namespace)
-	Namespace string `json:"namespace,omitempty"`
+	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// ClientIDKey is the key containing the OAuth client ID
-	ClientIDKey string `json:"clientIdKey"`
+	ClientIDKey string `yaml:"clientIdKey" json:"clientIdKey"`
 
 	// ClientSecretKey is the key containing the OAuth client secret
-	ClientSecretKey string `json:"clientSecretKey"`
+	ClientSecretKey string `yaml:"clientSecretKey" json:"clientSecretKey"`
 }
 
 // GetProviderCredentials retrieves API credentials for a provider
