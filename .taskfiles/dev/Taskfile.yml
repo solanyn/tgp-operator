@@ -12,29 +12,7 @@ tasks:
     desc: Generate provider API clients from OpenAPI/GraphQL specs
     deps: [install-codegen]
     cmds:
-      - task: generate-lambda-client
-      - task: generate-runpod-client
-  generate-lambda-client:
-    desc: Generate Lambda Labs client from converted OpenAPI spec
-    deps: [install-codegen]
-    cmds:
-      - curl -s https://cloud.lambda.ai/api/v1/openapi.json > /tmp/lambda-openapi-3.1.json
-      - npx @apiture/openapi-down-convert@latest -i /tmp/lambda-openapi-3.1.json -o
-        /tmp/lambda-openapi-3.0-converted.json
-      - mkdir -p pkg/providers/lambdalabs/api
-      - bin/oapi-codegen -generate "types,client" -package "api" -exclude-tags "Filesystems,SSH
-        Keys" -o pkg/providers/lambdalabs/api/generated.go /tmp/lambda-openapi-3.0-converted.json
-    sources: [https://cloud.lambda.ai/api/v1/openapi.json]
-    generates: [pkg/providers/lambdalabs/api/generated.go]
-  generate-runpod-client:
-    desc: Generate RunPod GraphQL client
-    deps: [install-codegen]
-    cmds: [cd pkg/providers/runpod && ../../../bin/genqlient]
-    sources:
-      - pkg/providers/runpod/genqlient.yaml
-      - pkg/providers/runpod/queries.graphql
-      - pkg/providers/runpod/schema.graphql
-    generates: [pkg/providers/runpod/generated.go]
+      - echo "No provider API clients to generate - using native SDKs"
   generate:
     desc: Generate code (deepcopy methods, CRDs, and provider clients)
     deps: [install-codegen]

@@ -65,10 +65,10 @@ tasks:
       - |
         if [ -z "{{.CLI_ARGS}}" ]; then
           echo "Usage examples:"
-          echo "  task test:provider -- -provider=runpod -action=list -gpu-type=RTX4090"
-          echo "  task test:provider -- -provider=lambdalabs -action=pricing -gpu-type=A100 -region=us-west-1"
+          echo "  task test:provider -- -provider=vultr -action=list -gpu-type=RTX4090"
+          echo "  task test:provider -- -provider=gcp -action=pricing -gpu-type=A100 -region=us-west1"
           echo ""
-          echo "Available providers: lambdalabs, runpod"
+          echo "Available providers: vultr, gcp"
           echo "Available actions: info, list, pricing"
         else
           op run --env-file=.env.template -- go run cmd/test-providers/main.go {{.CLI_ARGS}}
