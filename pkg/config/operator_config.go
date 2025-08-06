@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -152,6 +153,33 @@ func (c *OperatorConfig) GetTailscaleOAuthCredentials(ctx context.Context, clien
 	}
 
 	return string(clientIDBytes), string(clientSecretBytes), nil
+}
+
+// LoadConfig loads operator configuration from a ConfigMap or returns default config
+func LoadConfig(ctx context.Context, client client.Client, configMapName, namespace string) (*OperatorConfig, error) {
+	// Try to load from ConfigMap first
+	configMap := &corev1.ConfigMap{}
+	err := client.Get(ctx, types.NamespacedName{
+		Name:      configMapName,
+		Namespace: namespace,
+	}, configMap)
+	
+	if err != nil {
+		// ConfigMap not found, return default config
+		return DefaultConfig(), nil
+	}
+
+	configYAML, exists := configMap.Data["config.yaml"]
+	if !exists {
+		return nil, fmt.Errorf("config.yaml key not found in ConfigMap %s/%s", namespace, configMapName)
+	}
+
+	config := &OperatorConfig{}
+	if err := yaml.Unmarshal([]byte(configYAML), config); err != nil {
+		return nil, fmt.Errorf("failed to parse config YAML: %w", err)
+	}
+
+	return config, nil
 }
 
 // DefaultConfig returns a default operator configuration

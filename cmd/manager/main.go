@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 	"time"
@@ -61,7 +62,20 @@ func main() {
 	}
 
 	pricingCache := pricing.NewCache(time.Minute * 15)
-	operatorConfig := config.DefaultConfig() // Basic config for credential helpers
+	
+	// Load operator configuration from ConfigMap
+	operatorNamespace := os.Getenv("OPERATOR_NAMESPACE")
+	if operatorNamespace == "" {
+		operatorNamespace = "tgp-system" // Default namespace
+	}
+	
+	operatorConfig, err := config.LoadConfig(context.Background(), mgr.GetClient(), "tgp-operator-config", operatorNamespace)
+	if err != nil {
+		setupLog.Error(err, "failed to load operator configuration, using defaults")
+		operatorConfig = config.DefaultConfig()
+	} else {
+		setupLog.Info("loaded operator configuration from ConfigMap", "namespace", operatorNamespace)
+	}
 
 	// Setup GPUNodeClass controller
 	if err = (&controllers.GPUNodeClassReconciler{

@@ -26,3 +26,36 @@ serviceAccount:
   annotations: {}
 rbac:
   create: true
+
+# Operator configuration
+config:
+  # Cloud provider configurations
+  providers:
+    vultr:
+      enabled: false
+      credentialsRef:
+        name: "tgp-operator-secret"
+        # namespace: ""  # defaults to release namespace
+        key: "VULTR_API_KEY"
+    gcp:
+      enabled: false
+      credentialsRef:
+        name: "tgp-operator-secret"
+        key: "GOOGLE_APPLICATION_CREDENTIALS_JSON"
+
+  # Talos Linux configuration
+  talos:
+    image: "ghcr.io/siderolabs/talos:v1.10.5"
+
+  # Tailscale mesh networking configuration
+  tailscale:
+    tags:
+      - "tag:k8s"
+      - "tag:gpu"
+    ephemeral: true
+    acceptRoutes: true
+    oauthCredentialsRef:
+      name: "tgp-operator-secret"
+      # namespace: ""  # defaults to release namespace
+      clientIdKey: "client-id"
+      clientSecretKey: "client-secret"
