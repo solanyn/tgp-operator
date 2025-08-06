@@ -23,13 +23,6 @@ data:
         secretNamespace: {{ .Values.config.providers.lambdaLabs.secretNamespace }}
         {{- end }}
         apiKeySecretKey: {{ .Values.config.providers.lambdaLabs.apiKeySecretKey | default "LAMBDA_LABS_API_KEY" }}
-      paperspace:
-        enabled: {{ .Values.config.providers.paperspace.enabled | default true }}
-        secretName: {{ .Values.config.providers.paperspace.secretName | default "tgp-operator-secret" }}
-        {{- if .Values.config.providers.paperspace.secretNamespace }}
-        secretNamespace: {{ .Values.config.providers.paperspace.secretNamespace }}
-        {{- end }}
-        apiKeySecretKey: {{ .Values.config.providers.paperspace.apiKeySecretKey | default "PAPERSPACE_API_KEY" }}
     talos:
       image: {{ .Values.config.talos.image | default "ghcr.io/siderolabs/talos:v1.10.5" }}
     tailscale:

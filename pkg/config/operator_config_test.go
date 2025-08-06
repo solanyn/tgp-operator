@@ -22,9 +22,7 @@ func TestOperatorConfig_GetProviderCredentials(t *testing.T) {
 			Namespace: "test-namespace",
 		},
 		Data: map[string][]byte{
-			"RUNPOD_API_KEY":      []byte("runpod-key-123"),
-			"LAMBDA_LABS_API_KEY": []byte("lambda-key-456"),
-			"PAPERSPACE_API_KEY":  []byte("paperspace-key-789"),
+			"GOOGLE_APPLICATION_CREDENTIALS_JSON": []byte(`{"type":"service_account","project_id":"test-project"}`),
 		},
 	}
 
@@ -35,41 +33,25 @@ func TestOperatorConfig_GetProviderCredentials(t *testing.T) {
 
 	config := &OperatorConfig{
 		Providers: ProvidersConfig{
-			RunPod: ProviderConfig{
+			GCP: ProviderConfig{
 				Enabled:         true,
 				SecretName:      "test-secret",
 				SecretNamespace: "test-namespace",
-				APIKeySecretKey: "RUNPOD_API_KEY",
-			},
-			LambdaLabs: ProviderConfig{
-				Enabled:         false, // Disabled for testing
-				SecretName:      "test-secret",
-				SecretNamespace: "test-namespace",
-				APIKeySecretKey: "LAMBDA_LABS_API_KEY",
+				APIKeySecretKey: "GOOGLE_APPLICATION_CREDENTIALS_JSON",
 			},
 		},
 	}
 
 	ctx := context.Background()
 
-	t.Run("should return API key for enabled provider", func(t *testing.T) {
-		apiKey, err := config.GetProviderCredentials(ctx, fakeClient, "runpod", "default")
+	t.Run("should return API key for enabled GCP provider", func(t *testing.T) {
+		apiKey, err := config.GetProviderCredentials(ctx, fakeClient, "gcp", "default")
 		if err != nil {
 			t.Errorf("Expected no error, got: %v", err)
 		}
-		if apiKey != "runpod-key-123" {
-			t.Errorf("Expected 'runpod-key-123', got: %s", apiKey)
-		}
-	})
-
-	t.Run("should return error for disabled provider", func(t *testing.T) {
-		_, err := config.GetProviderCredentials(ctx, fakeClient, "lambdalabs", "default")
-		if err == nil {
-			t.Error("Expected error for disabled provider")
-		}
-		expectedMsg := "provider lambdalabs is not enabled"
-		if err.Error() != expectedMsg {
-			t.Errorf("Expected error message '%s', got: %s", expectedMsg, err.Error())
+		expectedJSON := `{"type":"service_account","project_id":"test-project"}`
+		if apiKey != expectedJSON {
+			t.Errorf("Expected '%s', got: %s", expectedJSON, apiKey)
 		}
 	})
 
@@ -135,20 +117,19 @@ func TestOperatorConfig_GetTailscaleOAuthCredentials(t *testing.T) {
 func TestDefaultConfig(t *testing.T) {
 	config := DefaultConfig()
 
-	t.Run("should have default provider configurations", func(t *testing.T) {
-		if !config.Providers.RunPod.Enabled {
-			t.Error("RunPod should be enabled by default")
+	t.Run("should have GCP provider configuration", func(t *testing.T) {
+		if !config.Providers.GCP.Enabled {
+			t.Error("GCP should be enabled by default")
 		}
-		if !config.Providers.LambdaLabs.Enabled {
-			t.Error("LambdaLabs should be enabled by default")
-		}
-		if !config.Providers.Paperspace.Enabled {
-			t.Error("Paperspace should be enabled by default")
-		}
-
+		
 		expectedSecretName := "tgp-operator-secret"
-		if config.Providers.RunPod.SecretName != expectedSecretName {
-			t.Errorf("Expected secret name '%s', got: %s", expectedSecretName, config.Providers.RunPod.SecretName)
+		if config.Providers.GCP.SecretName != expectedSecretName {
+			t.Errorf("Expected secret name '%s', got: %s", expectedSecretName, config.Providers.GCP.SecretName)
+		}
+		
+		expectedAPIKey := "GOOGLE_APPLICATION_CREDENTIALS_JSON"
+		if config.Providers.GCP.APIKeySecretKey != expectedAPIKey {
+			t.Errorf("Expected API key '%s', got: %s", expectedAPIKey, config.Providers.GCP.APIKeySecretKey)
 		}
 	})
 

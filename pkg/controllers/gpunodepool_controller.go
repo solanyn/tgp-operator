@@ -24,9 +24,8 @@ import (
 	"github.com/solanyn/tgp-operator/pkg/config"
 	"github.com/solanyn/tgp-operator/pkg/pricing"
 	"github.com/solanyn/tgp-operator/pkg/providers"
-	"github.com/solanyn/tgp-operator/pkg/providers/lambdalabs"
-	"github.com/solanyn/tgp-operator/pkg/providers/paperspace"
-	"github.com/solanyn/tgp-operator/pkg/providers/runpod"
+	"github.com/solanyn/tgp-operator/pkg/providers/gcp"
+	"github.com/solanyn/tgp-operator/pkg/providers/vultr"
 	"github.com/solanyn/tgp-operator/pkg/tailscale"
 )
 
@@ -457,12 +456,16 @@ func (r *GPUNodePoolReconciler) selectBestProvider(ctx context.Context, nodeClas
 // createProviderClient creates a provider client based on provider name
 func (r *GPUNodePoolReconciler) createProviderClient(providerName, credentials string) (providers.ProviderClient, error) {
 	switch providerName {
-	case "runpod":
-		return runpod.NewClient(credentials), nil
-	case "lambdalabs":
-		return lambdalabs.NewClient(credentials), nil
-	case "paperspace":
-		return paperspace.NewClient(credentials), nil
+	case "vultr":
+		client, err := vultr.NewClient(credentials)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Vultr client: %w", err)
+		}
+		return client, nil
+	case "gcp":
+		client := gcp.NewClient(credentials)
+		// Initialize will be called when needed
+		return client, nil
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", providerName)
 	}

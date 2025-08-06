@@ -59,7 +59,6 @@ tasks:
       - echo "  export VAST_API_KEY=your_vast_key"
       - echo "  export RUNPOD_API_KEY=your_runpod_key"
       - echo "  export LAMBDA_LABS_API_KEY=your_lambda_key"
-      - echo "  export PAPERSPACE_API_KEY=your_paperspace_key"
       - echo ""
       - go test ./test/real/... -v -timeout 5m -tags=real
   e2e:
@@ -73,7 +72,6 @@ tasks:
       - echo '  1. Set up API keys as environment variables:'
       - echo "     export RUNPOD_API_KEY=your_runpod_key"
       - echo "     export LAMBDA_LABS_API_KEY=your_lambda_key"
-      - echo "     export PAPERSPACE_API_KEY=your_paperspace_key"
       - echo ""
       - echo '  2. Set up WireGuard server infrastructure:'
       - echo "     - Deploy WireGuard server (VPS, homelab, etc.)"
@@ -91,7 +89,6 @@ tasks:
         kubectl create secret generic provider-secrets \
           --from-literal=runpod-api-key="${RUNPOD_API_KEY:-fake-key}" \
           --from-literal=lambda-labs-api-key="${LAMBDA_LABS_API_KEY:-fake-key}" \
-          --from-literal=paperspace-api-key="${PAPERSPACE_API_KEY:-fake-key}" \
           --dry-run=client -o yaml | kubectl apply -f -
       - echo "Running E2E test workflow..."
       - echo "  - Creating GPURequest with real provider"
@@ -136,7 +133,6 @@ tasks:
         kubectl create secret generic provider-secrets \
           --from-literal=runpod-api-key="${RUNPOD_API_KEY:-fake-key}" \
           --from-literal=lambda-labs-api-key="${LAMBDA_LABS_API_KEY:-fake-key}" \
-          --from-literal=paperspace-api-key="${PAPERSPACE_API_KEY:-fake-key}" \
           --dry-run=client -o yaml | kubectl apply -f -
       - |
         # Create Tailscale OAuth credentials secret (for dynamic auth key generation)

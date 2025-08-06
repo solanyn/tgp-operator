@@ -247,10 +247,9 @@ The task runner is aligned with our CI/CD workflows for consistency between loca
 Test individual provider APIs locally:
 
 ```bash
-# Test provider APIs locally (requires 1Password CLI)
-task test:provider -- -provider=runpod -action=list
-task test:provider -- -provider=lambdalabs -action=pricing -gpu-type=A100
-task test:provider -- -provider=paperspace -action=info
+# Test provider APIs locally
+task test:provider -- -provider=vultr -action=list
+task test:provider -- -provider=gcp -action=pricing -gpu-type=A100
 
 # Test all providers
 task test:providers
@@ -318,10 +317,10 @@ Validate cloud provider credentials before deployment:
 
 ```bash
 # Export API keys
-export VAST_API_KEY=your_vast_key
-export RUNPOD_API_KEY=your_runpod_key
-export LAMBDA_LABS_API_KEY=your_lambda_key
-export PAPERSPACE_API_KEY=your_paperspace_key
+export VULTR_API_KEY=your_vultr_key
+export GOOGLE_APPLICATION_CREDENTIALS=path_to_gcp_service_account_json
+export SCALEWAY_API_KEY=your_scaleway_key
+export DIGITALOCEAN_API_KEY=your_digitalocean_key
 
 # Validate connectivity (no instance launches)
 task test:validate-providers

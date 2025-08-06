@@ -2,36 +2,34 @@
 
 > Still heavily WIP!
 
-Kubernetes operator for ephemeral GPU provisioning across multiple cloud providers with Tailscale mesh networking.
+Kubernetes operator for ephemeral GPU provisioning across cloud providers using Tailscale mesh networking.
 
-Addresses intermittent GPU compute needs by provisioning instances on-demand from cloud providers and automatically integrating them into existing Talos Kubernetes clusters via Tailscale. Designed for workloads that require GPU resources occasionally rather than continuously.
+Provisions GPU instances on-demand and integrates them into Talos Kubernetes clusters.
 
 ## Features
 
-- **Multi-cloud support** - RunPod, Lambda Labs and Paperspace
-- **Tailscale mesh networking** - Node integration via Tailscale
-- **Cost optimization** - Automatic provider selection based on real-time pricing
-- **Lifecycle management** - Automated provisioning, configuration and cleanup
-- **Production monitoring** - Prometheus metrics for cost tracking and operational visibility
-- **Provider validation** - Real API credential verification and connectivity testing
+- Multi-cloud support: Google Cloud Platform, Vultr
+- Tailscale mesh networking
+- Automatic provider selection by pricing
+- Instance lifecycle management
+- Prometheus metrics
+- Provider credential validation
 
 ## Installation
 
 ### Prerequisites
 
-This operator requires the following:
-
-- **Talos Kubernetes cluster** - See [Talos documentation](https://www.talos.dev/latest/introduction/getting-started/) for cluster setup
-- **Tailscale** - For mesh networking and automatic node integration
-- **Cloud provider API keys** - From supported providers (RunPod, Lambda Labs, Paperspace)
+- Talos Kubernetes cluster
+- Tailscale account
+- Cloud provider API keys (GCP or Vultr)
 
 ### Setup Tailscale
 
-First, set up the Tailscale Operator in your cluster:
+Set up Tailscale Operator:
 
 ```bash
-# 1. Create Tailscale OAuth client at https://login.tailscale.com/admin/settings/oauth
-# 2. Grant device management permissions and tag:k8s-operator tag
+# Create OAuth client at https://login.tailscale.com/admin/settings/oauth
+# Grant device management permissions and tag:k8s-operator tag
 
 # Install Tailscale Operator
 helm repo add tailscale https://pkgs.tailscale.com/helmcharts
@@ -59,12 +57,10 @@ helm install tgp-operator oci://ghcr.io/solanyn/charts/tgp-operator \
 
 ### Configuration
 
-The operator uses resources inspired by Karpenter:
+Two resource types:
 
-1. **`GPUNodeClass`** - Cluster-scoped infrastructure templates
-2. **`GPUNodePool`** - Namespaced provisioning requests
-
-First, create provider credentials and configure infrastructure templates with `GPUNodeClass` resources.
+1. `GPUNodeClass` - Cluster-scoped infrastructure templates
+2. `GPUNodePool` - Namespaced provisioning requests
 
 ### Usage
 
@@ -73,29 +69,80 @@ First, create provider credentials and configure infrastructure templates with `
 ```bash
 # Create provider credentials secret
 kubectl create secret generic tgp-operator-secret \
-  --from-literal=RUNPOD_API_KEY=your-runpod-key \
-  --from-literal=LAMBDA_LABS_API_KEY=your-lambda-key \
-  --from-literal=PAPERSPACE_API_KEY=your-paperspace-key \
+  --from-literal=GOOGLE_APPLICATION_CREDENTIALS_JSON='{"type":"service_account","project_id":"your-project",...}' \
+  --from-literal=VULTR_API_KEY=your-vultr-api-key \
   --from-literal=client-id=your-tailscale-oauth-client-id \
   --from-literal=client-secret=your-tailscale-oauth-client-secret \
   -n tgp-system
 ```
 
-Ensure all credentials are properly configured:
-- **Provider API keys** from your cloud provider accounts
-- **Tailscale OAuth credentials** from your Tailscale admin console
+Required credentials:
+- Google Cloud service account JSON with IAM permissions
+- Vultr API key from account API section
+- Tailscale OAuth credentials from admin console
+
+#### Google Cloud Platform Setup
+
+Prepare Talos Linux images in your GCP project.
+
+**Option 1: Manual Upload**
+```bash
+# Download Talos GCP image
+wget https://github.com/siderolabs/talos/releases/download/v1.10.5/gcp-amd64.tar.gz
+
+# Create a temporary GCS bucket (if you don't have one)
+gsutil mb gs://YOUR-BUCKET-NAME
+
+# Upload to GCS bucket
+gsutil cp gcp-amd64.tar.gz gs://YOUR-BUCKET-NAME/talos-v1.10.5.tar.gz
+
+# Create compute image from bucket
+gcloud compute images create talos-linux-latest \
+  --source-uri gs://YOUR-BUCKET-NAME/talos-v1.10.5.tar.gz \
+  --family talos-linux \
+  --description "Talos Linux v1.10.5 for GPU workloads"
+
+# Clean up temporary files
+rm gcp-amd64.tar.gz
+gsutil rm gs://YOUR-BUCKET-NAME/talos-v1.10.5.tar.gz
+```
+
+**Option 2: Custom Image Reference**
+Specify image URL in `GPUNodeClass`:
+```yaml
+spec:
+  talosConfig:
+    image: "projects/MY-PROJECT/global/images/my-custom-talos-image"
+```
+
+**Required GCP IAM roles:**
+- `Compute Instance Admin (v1)`
+- `Compute Image User` 
+- `Service Account User`
+
+#### Vultr Setup
+
+- Get API key from Vultr Control Panel → Account → API
+- Talos Linux available via marketplace (OS ID: 2284)
+- GPU types: H100, L40S, A100, A40, A16, MI325X, MI300X
+- 32 global regions
+
+**Required permissions:**
+- Instance management
+- Plan access
+- Region access
 
 #### Step 2: Create GPUNodeClass (Infrastructure Template)
 
-The `GPUNodeClass` requires a complete Talos machine configuration template. The following template variables are automatically provided by the operator:
+`GPUNodeClass` requires Talos machine configuration template with variables:
 
-- `{{.MachineToken}}` - Token for joining the cluster
-- `{{.ClusterCA}}` - Cluster CA certificate
-- `{{.ClusterID}}` - Cluster ID
-- `{{.ClusterSecret}}` - Cluster secret
-- `{{.ControlPlaneEndpoint}}` - Control plane endpoint URL
-- `{{.ClusterName}}` - Cluster name
-- `{{.TailscaleAuthKey}}` - Generated Tailscale auth key
+- `{{.MachineToken}}`
+- `{{.ClusterCA}}`
+- `{{.ClusterID}}`
+- `{{.ClusterSecret}}`
+- `{{.ControlPlaneEndpoint}}`
+- `{{.ClusterName}}`
+- `{{.TailscaleAuthKey}}`
 - `{{.NodeName}}` - Generated node name
 - `{{.NodePool}}` - NodePool name
 - `{{.NodeIndex}}` - Node index in pool
@@ -107,18 +154,12 @@ metadata:
   name: standard-gpu-class
 spec:
   providers:
-    - name: runpod
+    - name: gcp
       priority: 1
       enabled: true
       credentialsRef:
         name: tgp-operator-secret
-        key: RUNPOD_API_KEY
-    - name: lambdalabs
-      priority: 2
-      enabled: true
-      credentialsRef:
-        name: tgp-operator-secret
-        key: LAMBDA_LABS_API_KEY
+        key: GOOGLE_APPLICATION_CREDENTIALS_JSON
   talosConfig:
     image: "ghcr.io/siderolabs/talos:v1.10.5"
     machineConfigTemplate: |
@@ -227,19 +268,18 @@ kubectl logs -n tgp-system deployment/tgp-operator-controller-manager -f
 
 ## Concepts
 
-The operator enables two Karpenter-inspired resources:
+Two resource types:
 
-1. Define infrastructure-level configuration `GPUNodeClass` such as:
-
-   - Cloud provider credentials and settings
-   - Talos OS and Tailscale networking configuration
+1. `GPUNodeClass` - Infrastructure configuration:
+   - Provider credentials and settings
+   - Talos OS and Tailscale configuration
    - Instance requirements and cost limits
-   - Resource governance and security policies
+   - Security policies
 
-2. Defines provisioning requests with `GPUNodePool`:
-   - Reference a `GPUNodeClass` for infrastructure details
-   - Specify node requirements and constraints
-   - Handle lifecycle management and disruption policies
+2. `GPUNodePool` - Provisioning requests:
+   - References `GPUNodeClass`
+   - Node requirements and constraints
+   - Lifecycle and disruption policies
 
 ## Development
 

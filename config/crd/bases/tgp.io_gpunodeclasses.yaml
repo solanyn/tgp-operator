@@ -121,7 +121,7 @@ spec:
                         for use
                       type: boolean
                     name:
-                      description: Name of the provider (runpod, paperspace, lambdalabs)
+                      description: Name of the provider (runpod, lambdalabs)
                       type: string
                     priority:
                       description: Priority for provider selection (lower numbers

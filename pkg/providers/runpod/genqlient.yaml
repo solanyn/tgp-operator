@@ -1,5 +1,0 @@
----
-schema: schema.graphql
-operations: [queries.graphql]
-generated: generated.go
-package: runpod

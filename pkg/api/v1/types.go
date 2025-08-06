@@ -284,7 +284,7 @@ const (
 
 // ProviderConfig defines configuration for a cloud provider
 type ProviderConfig struct {
-	// Name of the provider (runpod, paperspace, lambdalabs)
+	// Name of the provider
 	Name string `json:"name"`
 
 	// Priority for provider selection (lower numbers = higher priority)

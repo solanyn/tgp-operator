@@ -99,24 +99,24 @@ Provider clients are implemented using different approaches:
 
 1. **REST APIs**: OpenAPI code generation for type-safe clients
 2. **GraphQL APIs**: Code generation from GraphQL schemas
-3. **Manual Implementation**: Custom HTTP clients for simple APIs
+3. **Cloud SDKs**: Official cloud provider Go SDKs
 
 ## Provider Implementation Details
 
-### Lambda Labs - OpenAPI Generated Client
+### Vultr - OpenAPI Generated Client
 
-**Implementation**: `pkg/providers/lambdalabs/`
+**Implementation**: `pkg/providers/vultr/`
 **API Type**: REST API with OpenAPI specification
-**Base URL**: `https://cloud.lambdalabs.com`
+**Base URL**: `https://api.vultr.com/v2`
 
 #### Code Generation
 
-The Lambda Labs client uses OpenAPI code generation:
+The Vultr client uses OpenAPI code generation:
 
 ```bash
 # Generated from OpenAPI spec
 oapi-codegen -package api -generate client,types \
-  https://cloud.lambdalabs.com/api/openapi.json > pkg/providers/lambdalabs/api/client.go
+  vultr-openapi-spec.json > pkg/providers/vultr/api/client.go
 ```
 
 #### Client Structure
@@ -134,252 +134,161 @@ api.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
 })
 ```
 
-#### API Operations
+#### Key Features
 
-- `ListInstanceTypesWithResponse()` - Discovers available GPU types
-- `LaunchInstanceWithResponse()` - Creates new instances
-- `GetInstanceWithResponse()` - Retrieves instance status
-- `TerminateInstanceWithResponse()` - Terminates instances
+- Official Talos Linux marketplace integration
+- Fractional GPU options starting at $0.059/hr
+- Wide GPU range from A16 to A100
+- True on-demand billing
 
-#### Type Mapping
+### Google Cloud - Official SDK
 
-The client maps OpenAPI-generated types to provider interface types:
+**Implementation**: `pkg/providers/gcp/`
+**API Type**: Official Google Cloud Go SDK
+**Authentication**: Service Account JSON or Application Default Credentials
+
+#### SDK Usage
+
+The GCP client leverages the official Google Cloud Compute Engine SDK:
 
 ```go
-func (c *Client) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFilters) ([]providers.GPUOffer, error) {
-    resp, err := c.apiClient.ListInstanceTypesWithResponse(ctx)
+import (
+    compute "google.golang.org/api/compute/v1"
+    "google.golang.org/api/option"
+)
+
+type Client struct {
+    projectID     string
+    credentials   string
+    computeClient *compute.Service
+}
+
+func NewClient(credentials string) *Client {
+    ctx := context.Background()
+    var opts []option.ClientOption
+    
+    if credentials != "" {
+        opts = append(opts, option.WithCredentialsJSON([]byte(credentials)))
+    }
+    
+    service, err := compute.NewService(ctx, opts...)
     if err != nil {
-        return nil, fmt.Errorf("failed to list instance types: %w", err)
+        return nil
     }
-
-    var offers []providers.GPUOffer
-    for _, item := range resp.JSON200.Data {
-        instanceType := item.InstanceType
-        pricePerHour := float64(instanceType.PriceCentsPerHour) / 100.0
-
-        for _, region := range item.RegionsWithCapacityAvailable {
-            offer := providers.GPUOffer{
-                ID:          fmt.Sprintf("%s-%s", instanceType.Name, string(region.Name)),
-                Provider:    "lambda-labs",
-                GPUType:     instanceType.GpuDescription,
-                Region:      string(region.Name),
-                HourlyPrice: pricePerHour,
-                Memory:      int64(instanceType.Specs.MemoryGib),
-                Storage:     int64(instanceType.Specs.StorageGib),
-                Available:   true,
-                IsSpot:      false, // Lambda Labs doesn't support spot instances
-            }
-            offers = append(offers, offer)
-        }
+    
+    return &Client{
+        computeClient: service,
+        credentials:   credentials,
     }
-    return offers, nil
 }
 ```
 
-### RunPod - GraphQL Generated Client
+#### Talos Image Management
 
-**Implementation**: `pkg/providers/runpod/`
-**API Type**: GraphQL API with schema-based generation
-**Endpoint**: `https://api.runpod.io/graphql`
+GCP requires custom image upload for Talos Linux:
 
-#### Code Generation
-
-The RunPod client uses GraphQL code generation with genqlient:
-
-```yaml
-# genqlient.yaml
-schema: pkg/providers/runpod/schema.graphql
-operations:
-  - pkg/providers/runpod/queries.graphql
-generated: pkg/providers/runpod/generated.go
-package: runpod
-```
-
-#### GraphQL Operations
-
-Queries and mutations are defined in `.graphql` files:
-
-```graphql
-# queries.graphql
-query ListGPUTypes {
-  gpuTypes {
-    id
-    displayName
-    memoryInGb
-    communityPrice
-    communitySpotPrice
-  }
-}
-
-mutation RentSpotInstance($input: PodRentInterruptableInput!) {
-  podRentInterruptable(input: $input) {
-    id
-    status
-    machine {
-      podHostId
-    }
-  }
-}
-
-mutation TerminatePod($input: PodTerminateInput!) {
-  podTerminate(input: $input) {
-    id
-  }
-}
-
-query GetPod($podId: String!) {
-  pod(input: { podId: $podId }) {
-    id
-    name
-    status
-    runtime {
-      uptimeInSeconds
-    }
-  }
+```go
+func (c *Client) ensureTalosImage(ctx context.Context) error {
+    // Download Talos GCP image from Image Factory
+    imageURL := "https://factory.talos.dev/gcp/image.tar.gz"
+    
+    // Upload to Cloud Storage bucket
+    // Import as compute image
+    // Track for cleanup
 }
 ```
 
-#### Generated Client Usage
+#### Key Features
 
-The GraphQL client is generated with type-safe methods:
+- Enterprise-grade reliability and security
+- Comprehensive GPU options (A100, V100, T4, L4)
+- Global region availability
+- Competitive pricing with committed use discounts
+
+### Scaleway - OpenAPI Generated Client
+
+**Implementation**: `pkg/providers/scaleway/`
+**API Type**: REST API with OpenAPI specification
+**Base URL**: `https://api.scaleway.com`
+
+#### Client Structure
 
 ```go
 type Client struct {
-    *providers.BaseProvider
-    apiKey        string
-    graphqlClient graphql.Client
+    apiKey      string
+    apiClient   *api.ClientWithResponses
+    projectID   string
 }
 
-// Authentication wrapper
-type authHTTPClient struct {
-    client *http.Client
-    apiKey string
-}
-
-func (a *authHTTPClient) Do(req *http.Request) (*http.Response, error) {
-    req.Header.Set("Authorization", "Bearer "+a.apiKey)
-    return a.client.Do(req)
-}
-
-// Provider interface implementation using generated functions
-func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchRequest) (*providers.GPUInstance, error) {
-    input := PodRentInterruptableInput{
-        GpuTypeId:           req.GPUType,
-        Name:                fmt.Sprintf("tgp-%d", time.Now().Unix()),
-        ImageName:           "runpod/base:3.10-cuda11.8.0-devel-ubuntu22.04",
-        GpuCount:            1,
-        VolumeInGb:          20,
-    }
-
-    response, err := RentSpotInstance(ctx, c.graphqlClient, input) // Generated function
-    if err != nil {
-        return nil, fmt.Errorf("failed to launch RunPod spot instance: %w", err)
-    }
-
-    return &providers.GPUInstance{
-        ID:        response.PodRentInterruptable.Id,
-        Status:    c.mapRunPodStatusToProviderStatus(response.PodRentInterruptable.Status),
-        CreatedAt: time.Now(),
-    }, nil
-}
-```
-
-### Paperspace - OpenAPI Generated Client (Partial)
-
-**Implementation**: `pkg/providers/paperspace/`
-**API Type**: REST API with complex union types
-**Base URL**: `https://api.paperspace.com/v1`
-
-#### Implementation Challenge
-
-Paperspace API uses complex union types in create operations that complicate code generation:
-
-```json
-{
-  "machineType": {
-    "oneOf": [
-      { "type": "string", "enum": ["Air", "Standard", "Pro"] },
-      { "$ref": "#/components/schemas/MachineTypeConfig" }
-    ]
-  }
-}
-```
-
-#### Current Implementation
-
-The client uses generated types for read operations and simplified approach for create:
-
-```go
-type Client struct {
-    *providers.BaseProvider
-    apiKey    string
-    apiClient *api.ClientWithResponses  // Generated from OpenAPI
-}
-
-// Status and terminate use real API calls
-func (c *Client) GetInstanceStatus(ctx context.Context, instanceID string) (*providers.InstanceStatus, error) {
-    resp, err := c.apiClient.MachinesGetWithResponse(ctx, instanceID)
-    if err != nil {
-        return nil, fmt.Errorf("failed to get instance status: %w", err)
-    }
-
-    state := c.translateStatus(string(resp.JSON200.State))
-    return &providers.InstanceStatus{
-        State:     state,
-        Message:   c.getStatusMessage(string(resp.JSON200.State)),
-        UpdatedAt: time.Now(),
-    }, nil
-}
-
-// Launch uses simplified mock approach due to complex union types
-func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchRequest) (*providers.GPUInstance, error) {
-    // Enhanced mock implementation until union types are properly handled
-    return &providers.GPUInstance{
-        ID:        fmt.Sprintf("paperspace-real-%d", time.Now().Unix()),
-        Status:    providers.InstanceStatePending,
-        CreatedAt: time.Now(),
-    }, nil
-}
-```
-
-#### Authentication Pattern
-
-Paperspace uses Bearer token authentication:
-
-```go
+// Authentication uses X-Auth-Token header
 api.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
-    req.Header.Set("Authorization", "Bearer "+apiKey)
+    req.Header.Set("X-Auth-Token", apiKey)
     return nil
 })
 ```
+
+#### Key Features
+
+- European data centers and GDPR compliance
+- Competitive H100 and L40S pricing
+- Official Talos Linux support
+- Developer-friendly signup process
+
+### DigitalOcean - Official OpenAPI Specification
+
+**Implementation**: `pkg/providers/digitalocean/`
+**API Type**: REST API with official OpenAPI specification on GitHub
+**Base URL**: `https://api.digitalocean.com/v2`
+
+#### Code Generation
+
+DigitalOcean provides the highest quality OpenAPI specification:
+
+```bash
+# Download official spec from GitHub
+curl -o digitalocean-openapi.yaml \
+  https://raw.githubusercontent.com/digitalocean/openapi/main/specification/DigitalOcean-public.v2.yaml
+
+# Generate client
+oapi-codegen -package api -generate client,types \
+  digitalocean-openapi.yaml > pkg/providers/digitalocean/api/client.go
+```
+
+#### Key Features
+
+- Excellent API documentation and SDKs
+- RTX 4000 ADA GPUs at $0.76/hr
+- Per-second billing with 5-minute minimum
+- Official Talos Linux support
 
 ## Code Generation Summary
 
 ### Implementation Approaches
 
-| Provider    | API Type | Generation Tool | Client Pattern             | Status      |
-| ----------- | -------- | --------------- | -------------------------- | ----------- |
-| RunPod      | GraphQL  | genqlient       | Schema-based generation    | ✅ Complete |
-| Lambda Labs | REST     | oapi-codegen    | OpenAPI specification      | ✅ Complete |
-| Paperspace  | REST     | oapi-codegen    | Partial due to union types | 🔄 Partial  |
+| Provider      | API Type | Generation Tool | Client Pattern           | Status      |
+| ------------- | -------- | --------------- | ------------------------ | ----------- |
+| Vultr         | REST     | oapi-codegen    | OpenAPI specification    | 🔄 Planned  |
+| Google Cloud  | SDK      | Official SDK    | Cloud SDK integration    | 🔄 Planned  |
+| Scaleway      | REST     | oapi-codegen    | OpenAPI specification    | 🔄 Planned  |
+| DigitalOcean  | REST     | oapi-codegen    | GitHub OpenAPI spec      | 🔄 Planned  |
 
 ### Generated Artifacts
 
-#### RunPod GraphQL
+#### Vultr OpenAPI
+- `pkg/providers/vultr/api/client.go` - Generated REST client
+- `pkg/providers/vultr/api/types.go` - Generated type definitions
 
-- `pkg/providers/runpod/generated.go` - Generated types and functions
-- `pkg/providers/runpod/queries.graphql` - GraphQL operations
-- `pkg/providers/runpod/schema.graphql` - GraphQL schema
+#### Google Cloud SDK
+- Uses official `google.golang.org/api/compute/v1` package
+- Custom image management for Talos Linux deployment
 
-#### Lambda Labs OpenAPI
+#### Scaleway OpenAPI
+- `pkg/providers/scaleway/api/client.go` - Generated REST client
+- `pkg/providers/scaleway/api/types.go` - Generated type definitions
 
-- `pkg/providers/lambdalabs/api/client.go` - Generated REST client
-- `pkg/providers/lambdalabs/api/types.go` - Generated type definitions
-
-#### Paperspace OpenAPI
-
-- `pkg/providers/paperspace/api/client.go` - Generated REST client (read operations)
-- `pkg/providers/paperspace/api/types.go` - Generated type definitions
+#### DigitalOcean OpenAPI
+- `pkg/providers/digitalocean/api/client.go` - Generated REST client
+- `pkg/providers/digitalocean/api/types.go` - Generated type definitions
 
 ## Testing and Mocking Strategy
 
@@ -414,27 +323,15 @@ Controllers can test with real provider APIs when credentials are available:
 ```go
 func TestGPUNodePoolController(t *testing.T) {
     // Use real API key if available in environment
-    apiKey := os.Getenv("RUNPOD_API_KEY")
+    apiKey := os.Getenv("VULTR_API_KEY")
     if apiKey == "" {
         apiKey = "fake-api-key" // Falls back to mock behavior
     }
 
-    client := runpod.NewClient(apiKey)
+    client := vultr.NewClient(apiKey)
     // Test with either real or mock behavior
 }
 ```
-
-## Summary
-
-The TGP operator's provider integration architecture uses:
-
-1. **Declarative Configuration**: `GPUNodeClass` CRDs define provider settings
-2. **Code Generation**: OpenAPI and GraphQL tools generate type-safe clients
-3. **Standardized Interface**: Common `ProviderClient` interface abstracts provider differences
-4. **Resilience Patterns**: Circuit breakers, retries, and error classification
-5. **Testing Strategy**: Conditional mock behavior enables both unit and integration testing
-
-This architecture provides a scalable foundation for adding new providers while maintaining type safety and operational reliability. The focus on code generation ensures that API changes are caught at compile time and that client implementations remain consistent with provider specifications.
 
 ## Error Handling and Resilience
 
@@ -532,14 +429,29 @@ Controllers use a factory to instantiate provider clients:
 ```go
 func (r *GPUNodeClassReconciler) createProviderClient(providerName, credential string) (providers.ProviderClient, error) {
     switch providerName {
-    case "runpod":
-        return runpod.NewClient(credential), nil
-    case "lambdalabs":
-        return lambdalabs.NewClient(credential), nil
-    case "paperspace":
-        return paperspace.NewClient(credential), nil
+    case "vultr":
+        return vultr.NewClient(credential), nil
+    case "gcp":
+        return gcp.NewClient(credential), nil
+    case "scaleway":
+        return scaleway.NewClient(credential), nil
+    case "digitalocean":
+        return digitalocean.NewClient(credential), nil
     default:
         return nil, fmt.Errorf("unsupported provider: %s", providerName)
     }
 }
 ```
+
+## Summary
+
+The TGP operator's provider integration architecture uses:
+
+1. **Declarative Configuration**: `GPUNodeClass` CRDs define provider settings
+2. **Code Generation**: OpenAPI tools and official SDKs generate type-safe clients
+3. **Standardized Interface**: Common `ProviderClient` interface abstracts provider differences
+4. **Native Talos Support**: All providers support Talos Linux deployment
+5. **Developer-Friendly**: No business validation or upfront deposits required
+6. **Cost-Effective**: Budget options starting at $0.059/hr with Vultr fractional GPUs
+
+This architecture provides a scalable foundation for adding new providers while maintaining type safety, operational reliability, and cost optimization. The focus on native Talos Linux support ensures consistent deployment patterns across all cloud providers.

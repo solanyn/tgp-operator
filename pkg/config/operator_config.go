@@ -23,14 +23,10 @@ type OperatorConfig struct {
 
 // ProvidersConfig contains configuration for all cloud providers
 type ProvidersConfig struct {
-	// RunPod contains RunPod provider configuration
-	RunPod ProviderConfig `json:"runpod"`
-
-	// LambdaLabs contains Lambda Labs provider configuration
-	LambdaLabs ProviderConfig `json:"lambdaLabs"`
-
-	// Paperspace contains Paperspace provider configuration
-	Paperspace ProviderConfig `json:"paperspace"`
+	// Vultr contains Vultr provider configuration
+	Vultr ProviderConfig `json:"vultr"`
+	// GCP contains Google Cloud Platform provider configuration
+	GCP ProviderConfig `json:"gcp"`
 }
 
 // ProviderConfig contains configuration for a single cloud provider
@@ -83,12 +79,10 @@ func (c *OperatorConfig) GetProviderCredentials(ctx context.Context, client clie
 	var providerConfig ProviderConfig
 
 	switch provider {
-	case "runpod":
-		providerConfig = c.Providers.RunPod
-	case "lambdalabs":
-		providerConfig = c.Providers.LambdaLabs
-	case "paperspace":
-		providerConfig = c.Providers.Paperspace
+	case "vultr":
+		providerConfig = c.Providers.Vultr
+	case "gcp":
+		providerConfig = c.Providers.GCP
 	default:
 		return "", fmt.Errorf("unknown provider: %s", provider)
 	}
@@ -152,20 +146,10 @@ func (c *OperatorConfig) GetTailscaleOAuthCredentials(ctx context.Context, clien
 func DefaultConfig() *OperatorConfig {
 	return &OperatorConfig{
 		Providers: ProvidersConfig{
-			RunPod: ProviderConfig{
+			GCP: ProviderConfig{
 				Enabled:         true,
 				SecretName:      "tgp-operator-secret",
-				APIKeySecretKey: "RUNPOD_API_KEY",
-			},
-			LambdaLabs: ProviderConfig{
-				Enabled:         true,
-				SecretName:      "tgp-operator-secret",
-				APIKeySecretKey: "LAMBDA_LABS_API_KEY",
-			},
-			Paperspace: ProviderConfig{
-				Enabled:         true,
-				SecretName:      "tgp-operator-secret",
-				APIKeySecretKey: "PAPERSPACE_API_KEY",
+				APIKeySecretKey: "GOOGLE_APPLICATION_CREDENTIALS_JSON",
 			},
 		},
 		Talos: TalosDefaults{

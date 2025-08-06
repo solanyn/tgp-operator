@@ -18,9 +18,8 @@ import (
 	tgpv1 "github.com/solanyn/tgp-operator/pkg/api/v1"
 	"github.com/solanyn/tgp-operator/pkg/config"
 	"github.com/solanyn/tgp-operator/pkg/providers"
-	"github.com/solanyn/tgp-operator/pkg/providers/lambdalabs"
-	"github.com/solanyn/tgp-operator/pkg/providers/paperspace"
-	"github.com/solanyn/tgp-operator/pkg/providers/runpod"
+	"github.com/solanyn/tgp-operator/pkg/providers/gcp"
+	"github.com/solanyn/tgp-operator/pkg/providers/vultr"
 )
 
 const (
@@ -166,12 +165,12 @@ func (r *GPUNodeClassReconciler) validateProviderClient(ctx context.Context, pro
 	// Create provider client based on provider name
 	var providerClient providers.ProviderClient
 	switch providerName {
-	case "runpod":
-		providerClient = runpod.NewClient(credentials)
-	case "lambdalabs":
-		providerClient = lambdalabs.NewClient(credentials)
-	case "paperspace":
-		providerClient = paperspace.NewClient(credentials)
+	case "gcp":
+		client := gcp.NewClient(credentials)
+		if err := client.Initialize(ctx); err != nil {
+			return fmt.Errorf("failed to initialize GCP client: %w", err)
+		}
+		providerClient = client
 	default:
 		return fmt.Errorf("unsupported provider: %s", providerName)
 	}
@@ -367,18 +366,8 @@ func (r *GPUNodeClassReconciler) handleProviderAPIError(providerName string, err
 	errStr := err.Error()
 
 	switch providerName {
-	case "paperspace":
-		if contains(errStr, "json: cannot unmarshal number") && contains(errStr, "defaultSizeGb") {
-			return "Paperspace API schema incompatibility (defaultSizeGb field). This is a known issue with the generated client."
-		}
-	case "lambdalabs":
-		if contains(errStr, "429") || contains(errStr, "Too Many Requests") {
-			return "Lambda Labs API rate limit exceeded. Will retry in next cycle."
-		}
-	case "runpod":
-		if contains(errStr, "401") || contains(errStr, "Unauthorized") {
-			return "RunPod API authentication failed. Check API key."
-		}
+	default:
+		// No provider-specific error handling
 	}
 
 	// Generic error handling
@@ -436,12 +425,16 @@ func contains(s, substr string) bool {
 // createProviderClient creates a provider client based on provider name (duplicate of gpunodepool_controller)
 func (r *GPUNodeClassReconciler) createProviderClient(providerName, credentials string) (providers.ProviderClient, error) {
 	switch providerName {
-	case "runpod":
-		return runpod.NewClient(credentials), nil
-	case "lambdalabs":
-		return lambdalabs.NewClient(credentials), nil
-	case "paperspace":
-		return paperspace.NewClient(credentials), nil
+	case "vultr":
+		client, err := vultr.NewClient(credentials)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Vultr client: %w", err)
+		}
+		return client, nil
+	case "gcp":
+		client := gcp.NewClient(credentials)
+		// Initialize will be called when needed
+		return client, nil
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", providerName)
 	}

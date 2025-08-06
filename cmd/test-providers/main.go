@@ -9,14 +9,11 @@ import (
 	"time"
 
 	"github.com/solanyn/tgp-operator/pkg/providers"
-	"github.com/solanyn/tgp-operator/pkg/providers/lambdalabs"
-	"github.com/solanyn/tgp-operator/pkg/providers/paperspace"
-	"github.com/solanyn/tgp-operator/pkg/providers/runpod"
 )
 
 func main() {
 	var (
-		provider = flag.String("provider", "", "Provider to test (vast, runpod, lambdalabs, paperspace)")
+		provider = flag.String("provider", "", "Provider to test")
 		apiKey   = flag.String("api-key", "", "API key for the provider")
 		action   = flag.String("action", "list", "Action to perform (list, pricing, info)")
 		gpuType  = flag.String("gpu-type", "", "GPU type to filter by")
@@ -28,7 +25,7 @@ func main() {
 
 	if *provider == "" {
 		fmt.Println("Usage: go run cmd/test-providers/main.go -provider=<provider> -api-key=<key> [options]")
-		fmt.Println("Providers: runpod, lambdalabs, paperspace")
+		fmt.Println("Providers: (none currently available)")
 		fmt.Println("Actions: list, pricing, info")
 		flag.PrintDefaults()
 		os.Exit(1)
@@ -36,11 +33,7 @@ func main() {
 
 	// Get API key from environment if not provided
 	if *apiKey == "" {
-		envVars := map[string]string{
-			"runpod":     "RUNPOD_API_KEY",
-			"lambdalabs": "LAMBDA_LABS_API_KEY",
-			"paperspace": "PAPERSPACE_API_KEY",
-		}
+		envVars := map[string]string{}
 		if envVar, ok := envVars[*provider]; ok {
 			*apiKey = os.Getenv(envVar)
 		}
@@ -54,12 +47,6 @@ func main() {
 	// Create provider client
 	var client providers.ProviderClient
 	switch *provider {
-	case "runpod":
-		client = runpod.NewClient(*apiKey)
-	case "lambdalabs":
-		client = lambdalabs.NewClient(*apiKey)
-	case "paperspace":
-		client = paperspace.NewClient(*apiKey)
 	default:
 		fmt.Printf("Unknown provider: %s\n", *provider)
 		os.Exit(1)

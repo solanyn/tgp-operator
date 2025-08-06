@@ -9,9 +9,6 @@ import (
 	"time"
 
 	"github.com/solanyn/tgp-operator/pkg/providers"
-	"github.com/solanyn/tgp-operator/pkg/providers/lambdalabs"
-	"github.com/solanyn/tgp-operator/pkg/providers/paperspace"
-	"github.com/solanyn/tgp-operator/pkg/providers/runpod"
 )
 
 // TestProviderValidation validates real cloud provider connections and basic functionality
@@ -20,7 +17,7 @@ func TestProviderValidation(t *testing.T) {
 	defer cancel()
 
 	// Test configuration for validation
-	testGPUType := "RTX3090"
+	testGPUType := "RTX4090"
 	testRegion := "us-east-1"
 
 	tests := []struct {
@@ -29,21 +26,13 @@ func TestProviderValidation(t *testing.T) {
 		createFn  func(string) providers.ProviderClient
 		skipCheck func() bool
 	}{
-		{
-			name:     "runpod",
-			envVar:   "RUNPOD_API_KEY",
-			createFn: func(key string) providers.ProviderClient { return runpod.NewClient(key) },
-		},
-		{
-			name:     "lambda-labs",
-			envVar:   "LAMBDA_LABS_API_KEY",
-			createFn: func(key string) providers.ProviderClient { return lambdalabs.NewClient(key) },
-		},
-		{
-			name:     "paperspace",
-			envVar:   "PAPERSPACE_API_KEY",
-			createFn: func(key string) providers.ProviderClient { return paperspace.NewClient(key) },
-		},
+		// No providers currently available for testing
+		// New providers will be added here as they are implemented
+	}
+
+	if len(tests) == 0 {
+		t.Skip("No providers available for testing - new providers will be added during implementation")
+		return
 	}
 
 	for _, tt := range tests {
@@ -114,9 +103,7 @@ func TestProviderValidation(t *testing.T) {
 // TestProviderConnectivity tests basic connectivity to provider APIs
 func TestProviderConnectivity(t *testing.T) {
 	providers := map[string]string{
-		"runpod":      os.Getenv("RUNPOD_API_KEY"),
-		"lambda-labs": os.Getenv("LAMBDA_LABS_API_KEY"),
-		"paperspace":  os.Getenv("PAPERSPACE_API_KEY"),
+		// New providers will be added here as they are implemented
 	}
 
 	validProviders := 0
@@ -130,7 +117,8 @@ func TestProviderConnectivity(t *testing.T) {
 	}
 
 	if validProviders == 0 {
-		t.Skip("No provider credentials available for testing")
+		t.Skip("No provider credentials available for testing - new providers will be added during implementation")
+		return
 	}
 
 	t.Logf("✅ Found credentials for %d/%d providers", validProviders, len(providers))

@@ -26,7 +26,7 @@ func TestGPUNodeClassReconciler_Reconcile(t *testing.T) {
 		Spec: tgpv1.GPUNodeClassSpec{
 			Providers: []tgpv1.ProviderConfig{
 				{
-					Name:     "runpod",
+					Name:     "test-provider",
 					Priority: 1,
 					Enabled:  &[]bool{true}[0],
 					CredentialsRef: tgpv1.SecretKeyRef{

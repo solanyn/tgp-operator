@@ -122,9 +122,7 @@ func (v *GPUNodeClassValidator) validateProviders(providers []tgpv1.ProviderConf
 
 		// Validate provider name
 		validProviders := map[string]bool{
-			"runpod":     true,
-			"lambdalabs": true,
-			"paperspace": true,
+			"gcp": true,
 		}
 		if !validProviders[provider.Name] {
 			return fmt.Errorf("invalid provider name: %s", provider.Name)
