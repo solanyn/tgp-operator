@@ -74,12 +74,12 @@ func main() {
 		setupLog.Error(err, "failed to load operator configuration, using defaults")
 		operatorConfig = config.DefaultConfig()
 	} else {
-		setupLog.Info("loaded operator configuration from ConfigMap", "namespace", operatorNamespace)
-		// Debug: Log loaded configuration details
-		setupLog.Info("configuration loaded", 
+		setupLog.Info("loaded operator configuration from ConfigMap", 
+			"namespace", operatorNamespace,
 			"vultr.enabled", operatorConfig.Providers.Vultr.Enabled,
 			"gcp.enabled", operatorConfig.Providers.GCP.Enabled,
 			"vultr.secret", operatorConfig.Providers.Vultr.CredentialsRef.Name,
+			"vultr.key", operatorConfig.Providers.Vultr.CredentialsRef.Key,
 		)
 	}
 

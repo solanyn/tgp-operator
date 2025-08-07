@@ -178,17 +178,10 @@ func LoadConfig(ctx context.Context, client client.Client, configMapName, namesp
 		return nil, fmt.Errorf("config.yaml key not found in ConfigMap %s/%s", namespace, configMapName)
 	}
 
-	// Debug: log the YAML content being parsed
-	fmt.Printf("DEBUG: Raw YAML from ConfigMap:\n%s\n", configYAML)
-
 	config := &OperatorConfig{}
 	if err := yaml.Unmarshal([]byte(configYAML), config); err != nil {
 		return nil, fmt.Errorf("failed to parse config YAML: %w", err)
 	}
-
-	// Debug: log parsed configuration
-	fmt.Printf("DEBUG: Parsed config - vultr.enabled=%v, gcp.enabled=%v\n", 
-		config.Providers.Vultr.Enabled, config.Providers.GCP.Enabled)
 
 	return config, nil
 }
