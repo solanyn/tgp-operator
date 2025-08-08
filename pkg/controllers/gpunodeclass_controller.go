@@ -165,6 +165,12 @@ func (r *GPUNodeClassReconciler) validateProviderClient(ctx context.Context, pro
 	// Create provider client based on provider name
 	var providerClient providers.ProviderClient
 	switch providerName {
+	case "vultr":
+		client, err := vultr.NewClient(credentials)
+		if err != nil {
+			return fmt.Errorf("failed to create Vultr client: %w", err)
+		}
+		providerClient = client
 	case "gcp":
 		client := gcp.NewClient(credentials)
 		if err := client.Initialize(ctx); err != nil {
