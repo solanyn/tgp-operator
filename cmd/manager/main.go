@@ -63,24 +63,38 @@ func main() {
 
 	pricingCache := pricing.NewCache(time.Minute * 15)
 	
-	// Load operator configuration from ConfigMap
+	// Load operator configuration from ConfigMap with retry logic
 	operatorNamespace := os.Getenv("OPERATOR_NAMESPACE")
 	if operatorNamespace == "" {
 		operatorNamespace = "tgp-system" // Default namespace
 	}
 	
-	operatorConfig, err := config.LoadConfig(context.Background(), mgr.GetClient(), "tgp-operator-config", operatorNamespace)
-	if err != nil {
-		setupLog.Error(err, "failed to load operator configuration, using defaults")
+	var operatorConfig *config.OperatorConfig
+	var configErr error
+	
+	// Retry ConfigMap loading with exponential backoff
+	for attempt := 0; attempt < 5; attempt++ {
+		operatorConfig, configErr = config.LoadConfig(context.Background(), mgr.GetClient(), "tgp-operator-config", operatorNamespace)
+		if configErr == nil {
+			setupLog.Info("loaded operator configuration from ConfigMap", 
+				"namespace", operatorNamespace,
+				"attempt", attempt+1,
+				"vultr.enabled", operatorConfig.Providers.Vultr.Enabled,
+				"gcp.enabled", operatorConfig.Providers.GCP.Enabled,
+				"vultr.secret", operatorConfig.Providers.Vultr.CredentialsRef.Name,
+				"vultr.key", operatorConfig.Providers.Vultr.CredentialsRef.Key,
+			)
+			break
+		}
+		
+		waitTime := time.Duration(1<<attempt) * time.Second // 1s, 2s, 4s, 8s, 16s
+		setupLog.Info("ConfigMap loading failed, retrying", "attempt", attempt+1, "error", configErr.Error(), "retryIn", waitTime)
+		time.Sleep(waitTime)
+	}
+	
+	if configErr != nil {
+		setupLog.Error(configErr, "failed to load operator configuration after retries, using defaults")
 		operatorConfig = config.DefaultConfig()
-	} else {
-		setupLog.Info("loaded operator configuration from ConfigMap", 
-			"namespace", operatorNamespace,
-			"vultr.enabled", operatorConfig.Providers.Vultr.Enabled,
-			"gcp.enabled", operatorConfig.Providers.GCP.Enabled,
-			"vultr.secret", operatorConfig.Providers.Vultr.CredentialsRef.Name,
-			"vultr.key", operatorConfig.Providers.Vultr.CredentialsRef.Key,
-		)
 	}
 
 	// Setup GPUNodeClass controller

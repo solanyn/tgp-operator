@@ -169,8 +169,8 @@ func LoadConfig(ctx context.Context, client client.Client, configMapName, namesp
 	}, configMap)
 	
 	if err != nil {
-		// ConfigMap not found, return default config
-		return DefaultConfig(), nil
+		// Return error instead of silently falling back to defaults
+		return nil, fmt.Errorf("failed to load ConfigMap %s/%s: %w", namespace, configMapName, err)
 	}
 
 	configYAML, exists := configMap.Data["config.yaml"]
@@ -183,7 +183,48 @@ func LoadConfig(ctx context.Context, client client.Client, configMapName, namesp
 		return nil, fmt.Errorf("failed to parse config YAML: %w", err)
 	}
 
+	// Validate configuration
+	if err := validateConfig(config); err != nil {
+		return nil, fmt.Errorf("configuration validation failed: %w", err)
+	}
+
 	return config, nil
+}
+
+// validateConfig validates that the configuration has reasonable values
+func validateConfig(config *OperatorConfig) error {
+	if config == nil {
+		return fmt.Errorf("config is nil")
+	}
+
+	// Check that at least one provider is configured
+	hasEnabledProvider := false
+	
+	if config.Providers.Vultr.Enabled {
+		hasEnabledProvider = true
+		if config.Providers.Vultr.CredentialsRef.Name == "" {
+			return fmt.Errorf("vultr provider is enabled but credentialsRef.name is empty")
+		}
+		if config.Providers.Vultr.CredentialsRef.Key == "" {
+			return fmt.Errorf("vultr provider is enabled but credentialsRef.key is empty")
+		}
+	}
+	
+	if config.Providers.GCP.Enabled {
+		hasEnabledProvider = true
+		if config.Providers.GCP.CredentialsRef.Name == "" {
+			return fmt.Errorf("gcp provider is enabled but credentialsRef.name is empty")
+		}
+		if config.Providers.GCP.CredentialsRef.Key == "" {
+			return fmt.Errorf("gcp provider is enabled but credentialsRef.key is empty")
+		}
+	}
+	
+	if !hasEnabledProvider {
+		return fmt.Errorf("no providers are enabled - at least one provider must be enabled")
+	}
+
+	return nil
 }
 
 // DefaultConfig returns a default operator configuration
