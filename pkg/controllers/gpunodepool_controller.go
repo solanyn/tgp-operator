@@ -26,7 +26,6 @@ import (
 	"github.com/solanyn/tgp-operator/pkg/providers"
 	"github.com/solanyn/tgp-operator/pkg/providers/gcp"
 	"github.com/solanyn/tgp-operator/pkg/providers/vultr"
-	"github.com/solanyn/tgp-operator/pkg/tailscale"
 )
 
 const (
@@ -694,71 +693,6 @@ machine:
   features:
     rbac: true
     stableHostname: true
-  {{- if .TailscaleConfig}}
-  files:
-    - content: |
-        #!/bin/bash
-        # Install and configure Tailscale
-        curl -fsSL https://tailscale.com/install.sh | sh
-        
-        # Configure Tailscale with auth key
-        tailscale up --auth-key="{{.TailscaleAuthKey}}" --hostname="{{.TailscaleHostname}}" --advertise-tags="{{.TailscaleTags}}" {{.TailscaleFlags}}
-        
-        # Enable IP forwarding for subnet routing
-        echo 'net.ipv4.ip_forward = 1' >> /etc/sysctl.conf
-        echo 'net.ipv6.conf.all.forwarding = 1' >> /etc/sysctl.conf
-        sysctl -p
-      path: /opt/tgp/setup-tailscale.sh
-      permissions: 0755
-    - content: |
-        #!/bin/bash
-        # TGP Node Setup - GPU Operator will handle GPU drivers
-        echo "TGP node setup complete for pool: {{.NodePoolName}}"
-        
-        # Wait for kubelet to be ready, then remove startup taint
-        while ! kubectl --kubeconfig=/etc/kubernetes/kubelet.conf get nodes $(hostname) > /dev/null 2>&1; do
-          echo "Waiting for node to register..."
-          sleep 10
-        done
-        
-        # Remove startup taint once node is ready
-        kubectl --kubeconfig=/etc/kubernetes/kubelet.conf taint node $(hostname) node-initializing- || true
-        echo "Node initialization complete"
-      path: /opt/tgp/node-setup.sh
-      permissions: 0755
-  systemd:
-    units:
-      - name: tgp-tailscale-setup.service
-        enabled: true
-        contents: |
-          [Unit]
-          Description=TGP Tailscale Setup
-          After=network-online.target
-          Wants=network-online.target
-          
-          [Service]
-          Type=oneshot
-          ExecStart=/opt/tgp/setup-tailscale.sh
-          RemainAfterExit=true
-          
-          [Install]
-          WantedBy=multi-user.target
-      - name: tgp-node-setup.service
-        enabled: true
-        contents: |
-          [Unit]
-          Description=TGP Node Setup
-          After=kubelet.service tailscale.service
-          Wants=kubelet.service
-          
-          [Service]
-          Type=oneshot
-          ExecStart=/opt/tgp/node-setup.sh
-          RemainAfterExit=true
-          
-          [Install]
-          WantedBy=multi-user.target
-  {{- else}}
   files:
     - content: |
         #!/bin/bash
@@ -793,7 +727,40 @@ machine:
           
           [Install]
           WantedBy=multi-user.target
-  {{- end}}
+  files:
+    - content: |
+        #!/bin/bash
+        # TGP Node Setup - GPU Operator will handle GPU drivers
+        echo "TGP node setup complete for pool: {{.NodePoolName}}"
+        
+        # Wait for kubelet to be ready, then remove startup taint
+        while ! kubectl --kubeconfig=/etc/kubernetes/kubelet.conf get nodes $(hostname) > /dev/null 2>&1; do
+          echo "Waiting for node to register..."
+          sleep 10
+        done
+        
+        # Remove startup taint once node is ready
+        kubectl --kubeconfig=/etc/kubernetes/kubelet.conf taint node $(hostname) node-initializing- || true
+        echo "Node initialization complete"
+      path: /opt/tgp/node-setup.sh
+      permissions: 0755
+  systemd:
+    units:
+      - name: tgp-node-setup.service
+        enabled: true
+        contents: |
+          [Unit]
+          Description=TGP Node Setup
+          After=kubelet.service
+          Wants=kubelet.service
+          
+          [Service]
+          Type=oneshot
+          ExecStart=/opt/tgp/node-setup.sh
+          RemainAfterExit=true
+          
+          [Install]
+          WantedBy=multi-user.target
 cluster:
   id: {{.ClusterID}}
   secret: {{.ClusterSecret}}
@@ -821,7 +788,6 @@ func (r *GPUNodePoolReconciler) buildTemplateVariables(ctx context.Context, node
 	// Template variables will be populated from external sources (cluster credentials from user config)
 	// For now, we use placeholder values that users must replace in their machine config templates
 
-	tailscaleDefaults := r.Config.Tailscale
 	talosDefaults := r.Config.Talos
 
 	// Build node labels
@@ -853,36 +819,6 @@ func (r *GPUNodePoolReconciler) buildTemplateVariables(ctx context.Context, node
 		"NodePoolName": nodePool.Name,
 		"NodeLabels":   nodeLabels,
 		"NodeTaints":   nodePool.Spec.Template.Spec.Taints,
-
-		// Conditional Tailscale configuration
-		"TailscaleConfig": nodeClass.Spec.TailscaleConfig != nil,
-	}
-
-	// Add Tailscale-specific variables if enabled
-	if nodeClass.Spec.TailscaleConfig != nil {
-		tailscaleConfig := nodeClass.Spec.TailscaleConfig
-
-		// Build Tailscale tags
-		tags := tailscaleDefaults.Tags
-		if len(tailscaleConfig.Tags) > 0 {
-			tags = tailscaleConfig.Tags
-		}
-		tagsStr := strings.Join(tags, ",")
-
-		hostname := tailscaleConfig.Hostname
-		if hostname == "" {
-			hostname = fmt.Sprintf("tgp-%s-${HOSTNAME}", nodePool.Name)
-		}
-
-		// Generate Tailscale auth key via OAuth
-		authKey, err := r.generateTailscaleAuthKey(ctx, tailscaleConfig, tags)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate Tailscale auth key: %w", err)
-		}
-		vars["TailscaleAuthKey"] = authKey
-		vars["TailscaleHostname"] = hostname
-		vars["TailscaleTags"] = tagsStr
-		vars["TailscaleFlags"] = getTailscaleFlags(tailscaleConfig)
 	}
 
 	return vars, nil
@@ -897,17 +833,6 @@ func getKubeletImage(nodeClass *tgpv1.GPUNodeClass) string {
 	return "ghcr.io/siderolabs/kubelet:v1.31.1"
 }
 
-// getTailscaleFlags returns additional Tailscale flags based on configuration
-func getTailscaleFlags(config *tgpv1.TailscaleConfig) string {
-	flags := ""
-	if config != nil && config.GetAcceptRoutes() {
-		flags += " --accept-routes"
-	}
-	if config != nil && config.GetEphemeral() {
-		flags += " --ephemeral"
-	}
-	return flags
-}
 
 // applyTemplate applies Go template processing to the machine config template
 func (r *GPUNodePoolReconciler) applyTemplate(tmplStr string, vars map[string]interface{}) (string, error) {
@@ -1149,64 +1074,6 @@ func (r *GPUNodePoolReconciler) isStaticPod(pod *corev1.Pod) bool {
 	return false
 }
 
-// generateTailscaleAuthKey generates a Tailscale auth key using OAuth credentials
-func (r *GPUNodePoolReconciler) generateTailscaleAuthKey(ctx context.Context, tailscaleConfig *tgpv1.TailscaleConfig, tags []string) (string, error) {
-	if tailscaleConfig.OAuthCredentialsSecretRef == nil {
-		return "", fmt.Errorf("OAuth credentials secret reference is required")
-	}
-
-	// Resolve OAuth credentials from secret
-	clientID, clientSecret, err := r.getOAuthCredentials(ctx, tailscaleConfig.OAuthCredentialsSecretRef)
-	if err != nil {
-		return "", fmt.Errorf("failed to get OAuth credentials: %w", err)
-	}
-
-	// Create Tailscale OAuth client
-	client := tailscale.NewClient(clientID, clientSecret)
-
-	// Generate auth key with options
-	authKey, err := client.GenerateAuthKey(ctx, tailscale.AuthKeyOptions{
-		Tags:      tags,
-		Ephemeral: tailscaleConfig.GetEphemeral(),
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to generate auth key: %w", err)
-	}
-
-	return authKey, nil
-}
-
-// getOAuthCredentials retrieves OAuth credentials from the referenced secret
-func (r *GPUNodePoolReconciler) getOAuthCredentials(ctx context.Context, ref *tgpv1.TailscaleOAuthSecretRef) (string, string, error) {
-	namespace := ref.Namespace
-	if namespace == "" {
-		namespace = "default" // TODO: Get from context or controller config
-	}
-
-	secret := &corev1.Secret{}
-	err := r.Get(ctx, types.NamespacedName{
-		Name:      ref.Name,
-		Namespace: namespace,
-	}, secret)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to get OAuth secret %s/%s: %w", namespace, ref.Name, err)
-	}
-
-	clientIDKey := ref.GetClientIDKey()
-	clientSecretKey := ref.GetClientSecretKey()
-
-	clientID, exists := secret.Data[clientIDKey]
-	if !exists {
-		return "", "", fmt.Errorf("client ID key %s not found in secret %s/%s", clientIDKey, namespace, ref.Name)
-	}
-
-	clientSecret, exists := secret.Data[clientSecretKey]
-	if !exists {
-		return "", "", fmt.Errorf("client secret key %s not found in secret %s/%s", clientSecretKey, namespace, ref.Name)
-	}
-
-	return string(clientID), string(clientSecret), nil
-}
 
 // SetupWithManager sets up the controller with the Manager
 func (r *GPUNodePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {

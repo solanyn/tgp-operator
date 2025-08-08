@@ -69,54 +69,6 @@ func TestOperatorConfig_GetProviderCredentials(t *testing.T) {
 	})
 }
 
-func TestOperatorConfig_GetTailscaleOAuthCredentials(t *testing.T) {
-	scheme := runtime.NewScheme()
-	if err := corev1.AddToScheme(scheme); err != nil {
-		t.Fatalf("Failed to add scheme: %v", err)
-	}
-
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "tailscale-secret",
-			Namespace: "test-namespace",
-		},
-		Data: map[string][]byte{
-			"client-id":     []byte("tskey-client-12345"),
-			"client-secret": []byte("tskey-secret-67890"),
-		},
-	}
-
-	fakeClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithObjects(secret).
-		Build()
-
-	config := &OperatorConfig{
-		Tailscale: TailscaleDefaults{
-			OAuthCredentialsRef: OAuthSecretReference{
-				Name:            "tailscale-secret",
-				Namespace:       "test-namespace",
-				ClientIDKey:     "client-id",
-				ClientSecretKey: "client-secret",
-			},
-		},
-	}
-
-	ctx := context.Background()
-
-	t.Run("should return OAuth credentials", func(t *testing.T) {
-		clientID, clientSecret, err := config.GetTailscaleOAuthCredentials(ctx, fakeClient, "default")
-		if err != nil {
-			t.Errorf("Expected no error, got: %v", err)
-		}
-		if clientID != "tskey-client-12345" {
-			t.Errorf("Expected 'tskey-client-12345', got: %s", clientID)
-		}
-		if clientSecret != "tskey-secret-67890" {
-			t.Errorf("Expected 'tskey-secret-67890', got: %s", clientSecret)
-		}
-	})
-}
 
 func TestDefaultConfig(t *testing.T) {
 	config := DefaultConfig()
@@ -143,15 +95,4 @@ func TestDefaultConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("should have default Tailscale configuration", func(t *testing.T) {
-		if len(config.Tailscale.Tags) == 0 {
-			t.Error("Tailscale should have default tags")
-		}
-		if !config.Tailscale.Ephemeral {
-			t.Error("Tailscale should be ephemeral by default")
-		}
-		if !config.Tailscale.AcceptRoutes {
-			t.Error("Tailscale should accept routes by default")
-		}
-	})
 }

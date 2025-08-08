@@ -18,8 +18,6 @@ type OperatorConfig struct {
 	// Talos contains default Talos configuration
 	Talos TalosDefaults `yaml:"talos" json:"talos"`
 
-	// Tailscale contains Tailscale mesh networking configuration
-	Tailscale TailscaleDefaults `yaml:"tailscale" json:"tailscale"`
 }
 
 // ProvidersConfig contains configuration for all cloud providers
@@ -57,35 +55,6 @@ type TalosDefaults struct {
 	Image string `yaml:"image" json:"image"`
 }
 
-// TailscaleDefaults contains default Tailscale configuration
-type TailscaleDefaults struct {
-	// Tags are the default tags to apply to devices
-	Tags []string `yaml:"tags" json:"tags"`
-
-	// Ephemeral indicates whether devices should be ephemeral by default
-	Ephemeral bool `yaml:"ephemeral" json:"ephemeral"`
-
-	// AcceptRoutes indicates whether to accept routes by default
-	AcceptRoutes bool `yaml:"acceptRoutes" json:"acceptRoutes"`
-
-	// OAuthCredentialsRef references the secret containing OAuth credentials
-	OAuthCredentialsRef OAuthSecretReference `yaml:"oauthCredentialsRef" json:"oauthCredentialsRef"`
-}
-
-// OAuthSecretReference contains references to OAuth client ID and secret
-type OAuthSecretReference struct {
-	// Name is the name of the secret
-	Name string `yaml:"name" json:"name"`
-
-	// Namespace is the namespace of the secret (defaults to operator namespace)
-	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// ClientIDKey is the key containing the OAuth client ID
-	ClientIDKey string `yaml:"clientIdKey" json:"clientIdKey"`
-
-	// ClientSecretKey is the key containing the OAuth client secret
-	ClientSecretKey string `yaml:"clientSecretKey" json:"clientSecretKey"`
-}
 
 // GetProviderCredentials retrieves API credentials for a provider
 func (c *OperatorConfig) GetProviderCredentials(ctx context.Context, client client.Client, provider string, operatorNamespace string) (string, error) {
@@ -127,34 +96,6 @@ func (c *OperatorConfig) GetProviderCredentials(ctx context.Context, client clie
 	return string(apiKey), nil
 }
 
-// GetTailscaleOAuthCredentials retrieves Tailscale OAuth credentials
-func (c *OperatorConfig) GetTailscaleOAuthCredentials(ctx context.Context, client client.Client, operatorNamespace string) (clientID, clientSecret string, err error) {
-	secretNamespace := c.Tailscale.OAuthCredentialsRef.Namespace
-	if secretNamespace == "" {
-		secretNamespace = operatorNamespace
-	}
-
-	secret := &corev1.Secret{}
-	err = client.Get(ctx, types.NamespacedName{
-		Name:      c.Tailscale.OAuthCredentialsRef.Name,
-		Namespace: secretNamespace,
-	}, secret)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to get Tailscale OAuth secret %s/%s: %w", secretNamespace, c.Tailscale.OAuthCredentialsRef.Name, err)
-	}
-
-	clientIDBytes, exists := secret.Data[c.Tailscale.OAuthCredentialsRef.ClientIDKey]
-	if !exists {
-		return "", "", fmt.Errorf("client ID key %s not found in secret %s/%s", c.Tailscale.OAuthCredentialsRef.ClientIDKey, secretNamespace, c.Tailscale.OAuthCredentialsRef.Name)
-	}
-
-	clientSecretBytes, exists := secret.Data[c.Tailscale.OAuthCredentialsRef.ClientSecretKey]
-	if !exists {
-		return "", "", fmt.Errorf("client secret key %s not found in secret %s/%s", c.Tailscale.OAuthCredentialsRef.ClientSecretKey, secretNamespace, c.Tailscale.OAuthCredentialsRef.Name)
-	}
-
-	return string(clientIDBytes), string(clientSecretBytes), nil
-}
 
 // LoadConfig loads operator configuration from a ConfigMap or returns default config
 func LoadConfig(ctx context.Context, client client.Client, configMapName, namespace string) (*OperatorConfig, error) {
@@ -245,16 +186,6 @@ func DefaultConfig() *OperatorConfig {
 		},
 		Talos: TalosDefaults{
 			Image: "ghcr.io/siderolabs/talos:v1.10.5",
-		},
-		Tailscale: TailscaleDefaults{
-			Tags:         []string{"tag:k8s", "tag:gpu"},
-			Ephemeral:    true,
-			AcceptRoutes: true,
-			OAuthCredentialsRef: OAuthSecretReference{
-				Name:            "tgp-operator-secret",
-				ClientIDKey:     "client-id",
-				ClientSecretKey: "client-secret",
-			},
 		},
 	}
 }

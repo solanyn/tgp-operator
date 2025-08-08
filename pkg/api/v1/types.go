@@ -44,8 +44,6 @@ type GPUNodeClassSpec struct {
 	// TalosConfig contains default Talos OS configuration
 	TalosConfig *TalosConfig `json:"talosConfig,omitempty"`
 
-	// TailscaleConfig contains default Tailscale networking configuration
-	TailscaleConfig *TailscaleConfig `json:"tailscaleConfig,omitempty"`
 
 	// InstanceRequirements defines the instance constraints
 	InstanceRequirements *InstanceRequirements `json:"instanceRequirements,omitempty"`
@@ -391,75 +389,6 @@ type TalosConfig struct {
 	KubeletImage string `json:"kubeletImage,omitempty"`
 }
 
-// TailscaleConfig contains Tailscale mesh networking configuration
-type TailscaleConfig struct {
-	// Hostname for the Tailscale device (optional, defaults to generated name)
-	// +optional
-	Hostname string `json:"hostname,omitempty"`
-
-	// Tags to apply to the device for ACL targeting
-	// Default: ["tag:k8s"]
-	// +optional
-	Tags []string `json:"tags,omitempty"`
-
-	// Ephemeral indicates whether the device should be ephemeral (cleanup on deletion)
-	// Default: true
-	// +optional
-	Ephemeral *bool `json:"ephemeral,omitempty"`
-
-	// AcceptRoutes indicates whether to accept routes from other devices in the tailnet
-	// Default: true
-	// +optional
-	AcceptRoutes *bool `json:"acceptRoutes,omitempty"`
-
-	// AdvertiseRoutes specifies subnet routes to advertise (for gateway nodes)
-	// +optional
-	AdvertiseRoutes []string `json:"advertiseRoutes,omitempty"`
-
-	// OAuthCredentialsSecretRef references a secret containing Tailscale OAuth credentials
-	// The operator will use these to dynamically generate auth keys as needed
-	// Secret should contain 'client-id' and 'client-secret' keys
-	// +optional
-	OAuthCredentialsSecretRef *TailscaleOAuthSecretRef `json:"oauthCredentialsSecretRef,omitempty"`
-
-	// OperatorConfig contains Tailscale Operator integration settings
-	// +optional
-	OperatorConfig *TailscaleOperatorConfig `json:"operatorConfig,omitempty"`
-}
-
-// TailscaleOperatorConfig contains Tailscale Operator specific configuration
-type TailscaleOperatorConfig struct {
-	// ConnectorEnabled indicates whether to create a Tailscale Connector CRD
-	// Default: true
-	// +optional
-	ConnectorEnabled *bool `json:"connectorEnabled,omitempty"`
-
-	// ConnectorSpec allows customization of the Connector CRD
-	// +optional
-	ConnectorSpec *TailscaleConnectorSpec `json:"connectorSpec,omitempty"`
-}
-
-// TailscaleConnectorSpec contains Tailscale Connector CRD configuration
-type TailscaleConnectorSpec struct {
-	// SubnetRouter configures the node as a subnet router
-	// +optional
-	SubnetRouter *TailscaleSubnetRouter `json:"subnetRouter,omitempty"`
-
-	// ExitNode configures the node as an exit node
-	// +optional
-	ExitNode *bool `json:"exitNode,omitempty"`
-
-	// AppConnector configures the node as an app connector
-	// +optional
-	AppConnector *bool `json:"appConnector,omitempty"`
-}
-
-// TailscaleSubnetRouter contains subnet router configuration
-type TailscaleSubnetRouter struct {
-	// AdvertiseRoutes specifies the subnet routes to advertise
-	AdvertiseRoutes []string `json:"advertiseRoutes"`
-}
-
 // SecretKeyRef references a specific key in a Kubernetes secret
 type SecretKeyRef struct {
 	// Name is the name of the secret
@@ -472,86 +401,9 @@ type SecretKeyRef struct {
 	Namespace string `json:"namespace,omitempty"`
 }
 
-// TailscaleOAuthSecretRef references a secret containing Tailscale OAuth credentials
-type TailscaleOAuthSecretRef struct {
-	// Name is the name of the secret containing OAuth credentials
-	Name string `json:"name"`
-
-	// Namespace is the namespace of the secret (optional, defaults to current namespace)
-	Namespace string `json:"namespace,omitempty"`
-
-	// ClientIDKey is the key containing the OAuth client ID (defaults to "client-id")
-	// +optional
-	ClientIDKey string `json:"clientIdKey,omitempty"`
-
-	// ClientSecretKey is the key containing the OAuth client secret (defaults to "client-secret")
-	// +optional
-	ClientSecretKey string `json:"clientSecretKey,omitempty"`
-}
-
-// TailscaleConfig helper methods
-
-// GetHostname returns the hostname or a generated default
-func (tc *TailscaleConfig) GetHostname(fallback string) string {
-	if tc.Hostname != "" {
-		return tc.Hostname
-	}
-	return fallback
-}
-
-// GetTags returns the tags or default tags
-func (tc *TailscaleConfig) GetTags() []string {
-	if len(tc.Tags) > 0 {
-		return tc.Tags
-	}
-	return []string{"tag:k8s"}
-}
-
-// GetEphemeral returns the ephemeral setting or default (true)
-func (tc *TailscaleConfig) GetEphemeral() bool {
-	if tc.Ephemeral != nil {
-		return *tc.Ephemeral
-	}
-	return true
-}
-
-// GetAcceptRoutes returns the accept routes setting or default (true)
-func (tc *TailscaleConfig) GetAcceptRoutes() bool {
-	if tc.AcceptRoutes != nil {
-		return *tc.AcceptRoutes
-	}
-	return true
-}
-
-// GetConnectorEnabled returns whether Connector CRD should be created
-func (tc *TailscaleConfig) GetConnectorEnabled() bool {
-	if tc.OperatorConfig != nil && tc.OperatorConfig.ConnectorEnabled != nil {
-		return *tc.OperatorConfig.ConnectorEnabled
-	}
-	return true
-}
-
-// TailscaleOAuthSecretRef helper methods
-
-// GetClientIDKey returns the client ID key or default
-func (ref *TailscaleOAuthSecretRef) GetClientIDKey() string {
-	if ref.ClientIDKey != "" {
-		return ref.ClientIDKey
-	}
-	return "client-id"
-}
-
-// GetClientSecretKey returns the client secret key or default
-func (ref *TailscaleOAuthSecretRef) GetClientSecretKey() string {
-	if ref.ClientSecretKey != "" {
-		return ref.ClientSecretKey
-	}
-	return "client-secret"
-}
-
 // TalosConfig helper methods
 
 // GetNetworkingBackend returns the networking backend being used
 func (tc *TalosConfig) GetNetworkingBackend() string {
-	return "tailscale"
+	return "kubespan"
 }
