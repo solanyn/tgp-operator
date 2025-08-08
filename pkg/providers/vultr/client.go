@@ -3,6 +3,7 @@ package vultr
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -93,7 +94,7 @@ func (c *Client) GetInstanceStatus(ctx context.Context, instanceID string) (*pro
 
 func (c *Client) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFilters) ([]providers.GPUOffer, error) {
 	options := &govultr.ListOptions{}
-	plans, _, _, err := c.client.Plan.List(ctx, "gpu", options)
+	plans, _, _, err := c.client.Plan.List(ctx, "vcg", options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list GPU plans: %w", err)
 	}
@@ -105,26 +106,39 @@ func (c *Client) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFi
 			continue
 		}
 
-		if filters.GPUType != "" && !strings.EqualFold(gpuType, filters.GPUType) {
+		if filters != nil && filters.GPUType != "" && !strings.EqualFold(gpuType, filters.GPUType) {
 			continue
 		}
 
-		if filters.Region != "" && !c.isPlanAvailableInRegion(&plan, filters.Region) {
+		if filters != nil && filters.Region != "" && !c.isPlanAvailableInRegion(&plan, filters.Region) {
 			continue
 		}
 
 		hourlyPrice := c.calculateHourlyPrice(plan.MonthlyCost)
-		if filters.MaxPrice > 0 && hourlyPrice > filters.MaxPrice {
+		if filters != nil && filters.MaxPrice > 0 && hourlyPrice > filters.MaxPrice {
 			continue
 		}
 
+		region := ""
+		if filters != nil {
+			region = filters.Region
+		}
+		
+		// Extract VRAM from plan ID (e.g., vcg-a16-2c-8g-2vram -> 2GB VRAM)
+		vram := c.extractVRAMFromPlan(&plan)
+		
+		// Apply VRAM filtering if specified
+		if filters != nil && filters.MinMemory > 0 && vram < filters.MinMemory {
+			continue
+		}
+		
 		offer := providers.GPUOffer{
 			ID:          plan.ID,
 			GPUType:     gpuType,
 			GPUCount:    gpuCount,
-			Region:      filters.Region,
+			Region:      region,
 			HourlyPrice: hourlyPrice,
-			Memory:      int64(plan.RAM / 1024), // Convert MB to GB
+			Memory:      vram, // Use VRAM instead of system RAM
 			Storage:     int64(plan.Disk),
 			Available:   true,
 			Provider:    ProviderName,
@@ -172,7 +186,7 @@ func (c *Client) GetProviderInfo() *providers.ProviderInfo {
 	return &providers.ProviderInfo{
 		Name:                  ProviderName,
 		APIVersion:            "v2",
-		SupportedGPUTypes:     []string{"H100", "L40S", "A100", "A40", "A16", "MI325X", "MI300X"},
+		SupportedGPUTypes:     []string{"NVIDIA_H100", "NVIDIA_L40S", "NVIDIA_A100", "NVIDIA_A40", "NVIDIA_A16", "AMD_MI325X", "AMD_MI300X"},
 		SupportsSpotInstances: false,
 		SupportsMultiGPU:      true,
 		BillingGranularity:    providers.BillingPerHour,
@@ -191,13 +205,20 @@ func (c *Client) GetRateLimits() *providers.RateLimitInfo {
 
 func (c *Client) TranslateGPUType(standard string) (string, error) {
 	gpuMapping := map[string]string{
-		"H100":   "H100",
-		"L40S":   "L40S",
-		"A100":   "A100",
-		"A40":    "A40",
-		"A16":    "A16",
-		"MI325X": "MI325X",
-		"MI300X": "MI300X",
+		"H100":        "NVIDIA_H100",
+		"L40S":        "NVIDIA_L40S",
+		"A100":        "NVIDIA_A100",
+		"A40":         "NVIDIA_A40",
+		"A16":         "NVIDIA_A16",
+		"MI325X":      "AMD_MI325X",
+		"MI300X":      "AMD_MI300X",
+		"NVIDIA_H100": "NVIDIA_H100",
+		"NVIDIA_L40S": "NVIDIA_L40S",
+		"NVIDIA_A100": "NVIDIA_A100",
+		"NVIDIA_A40":  "NVIDIA_A40",
+		"NVIDIA_A16":  "NVIDIA_A16",
+		"AMD_MI325X":  "AMD_MI325X",
+		"AMD_MI300X":  "AMD_MI300X",
 	}
 
 	if vultrType, exists := gpuMapping[strings.ToUpper(standard)]; exists {
@@ -214,7 +235,7 @@ func (c *Client) TranslateRegion(standard string) (string, error) {
 
 func (c *Client) findBestPlan(ctx context.Context, req *providers.LaunchRequest) (*govultr.Plan, error) {
 	options := &govultr.ListOptions{}
-	plans, _, _, err := c.client.Plan.List(ctx, "gpu", options)
+	plans, _, _, err := c.client.Plan.List(ctx, "vcg", options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list GPU plans: %w", err)
 	}
@@ -243,36 +264,75 @@ func (c *Client) findBestPlan(ctx context.Context, req *providers.LaunchRequest)
 }
 
 func (c *Client) extractGPUFromPlan(plan *govultr.Plan) (string, int) {
-	// Use GPUType field if available, otherwise try to parse from Type
-	if plan.GPUType != "" {
-		return plan.GPUType, 1
+	// Try to parse from plan ID first (e.g., vcg-a16-2c-8g-2vram)
+	if plan.ID != "" {
+		planID := strings.ToLower(plan.ID)
+		if gpu := c.extractGPUFromID(planID); gpu != "" {
+			return gpu, 1
+		}
 	}
 	
+	// Use GPUType field if available, keep full string
+	if plan.GPUType != "" {
+		return strings.ToUpper(plan.GPUType), 1
+	}
+	
+	// Fallback to plan type parsing
 	planType := strings.ToUpper(plan.Type)
-
-	if strings.Contains(planType, "H100") {
-		return "H100", 1
-	}
-	if strings.Contains(planType, "L40S") {
-		return "L40S", 1
-	}
-	if strings.Contains(planType, "A100") {
-		return "A100", 1
-	}
-	if strings.Contains(planType, "A40") {
-		return "A40", 1
-	}
-	if strings.Contains(planType, "A16") {
-		return "A16", 1
-	}
-	if strings.Contains(planType, "MI325X") {
-		return "MI325X", 1
-	}
-	if strings.Contains(planType, "MI300X") {
-		return "MI300X", 1
+	if gpu := c.extractGPUFromID(planType); gpu != "" {
+		return gpu, 1
 	}
 
 	return "", 0
+}
+
+// extractGPUFromID extracts GPU type from plan ID or type string
+func (c *Client) extractGPUFromID(idOrType string) string {
+	idOrType = strings.ToUpper(idOrType)
+	
+	if strings.Contains(idOrType, "H100") {
+		return "NVIDIA_H100"
+	}
+	if strings.Contains(idOrType, "L40S") {
+		return "NVIDIA_L40S"
+	}
+	if strings.Contains(idOrType, "A100") {
+		return "NVIDIA_A100"
+	}
+	if strings.Contains(idOrType, "A40") {
+		return "NVIDIA_A40"
+	}
+	if strings.Contains(idOrType, "A16") {
+		return "NVIDIA_A16"
+	}
+	if strings.Contains(idOrType, "MI325X") {
+		return "AMD_MI325X"
+	}
+	if strings.Contains(idOrType, "MI300X") {
+		return "AMD_MI300X"
+	}
+	
+	return ""
+}
+
+// extractVRAMFromPlan extracts VRAM in GB from plan ID (e.g., vcg-a16-2c-8g-2vram -> 2)
+func (c *Client) extractVRAMFromPlan(plan *govultr.Plan) int64 {
+	if plan.ID == "" {
+		return 0
+	}
+	
+	// Parse VRAM from plan ID like "vcg-a16-2c-8g-2vram"
+	parts := strings.Split(plan.ID, "-")
+	for _, part := range parts {
+		if strings.HasSuffix(part, "vram") {
+			vramStr := strings.TrimSuffix(part, "vram")
+			if vram, err := strconv.ParseInt(vramStr, 10, 64); err == nil {
+				return vram
+			}
+		}
+	}
+	
+	return 0
 }
 
 func (c *Client) calculateHourlyPrice(monthlyCost float32) float64 {

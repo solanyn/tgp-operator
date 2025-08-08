@@ -63,15 +63,24 @@ func (c *Client) getMachinePricing(machineType, region string) float64 {
 func (c *Client) getGPUPricing(gpuType, region string) float64 {
 	// GCP GPU pricing (approximate USD per hour per GPU)
 	gpuPricing := map[string]float64{
-		"K80":       0.45,
-		"P4":        0.60,
-		"P100":      1.46,
-		"V100":      2.48,
-		"T4":        0.35,
-		"A100":      2.93,
-		"A100-80GB": 3.67,
-		"H100":      8.00, // Approximate
-		"L4":        0.60,
+		"K80":             0.45,
+		"P4":              0.60,
+		"P100":            1.46,
+		"V100":            2.48,
+		"T4":              0.35,
+		"A100":            2.93,
+		"A100-80GB":       3.67,
+		"H100":            8.00, // Approximate
+		"L4":              0.60,
+		"NVIDIA_K80":      0.45,
+		"NVIDIA_P4":       0.60,
+		"NVIDIA_P100":     1.46,
+		"NVIDIA_V100":     2.48,
+		"NVIDIA_T4":       0.35,
+		"NVIDIA_A100":     2.93,
+		"NVIDIA_A100_80GB": 3.67,
+		"NVIDIA_H100_80GB": 8.00, // Approximate
+		"NVIDIA_L4":       0.60,
 	}
 	
 	basePrice, exists := gpuPricing[gpuType]

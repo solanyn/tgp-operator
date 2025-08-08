@@ -1,6 +1,8 @@
 package vultr
 
 import (
+	"context"
+	"os"
 	"testing"
 
 	"github.com/vultr/govultr/v3"
@@ -47,7 +49,7 @@ func TestClient_GetProviderInfo(t *testing.T) {
 		t.Errorf("GetProviderInfo().Name = %v, want %v", info.Name, ProviderName)
 	}
 
-	expectedGPUs := []string{"H100", "L40S", "A100", "A40", "A16", "MI325X", "MI300X"}
+	expectedGPUs := []string{"NVIDIA_H100", "NVIDIA_L40S", "NVIDIA_A100", "NVIDIA_A40", "NVIDIA_A16", "AMD_MI325X", "AMD_MI300X"}
 	if len(info.SupportedGPUTypes) != len(expectedGPUs) {
 		t.Errorf("GetProviderInfo().SupportedGPUTypes returned %d GPU types, want %d", len(info.SupportedGPUTypes), len(expectedGPUs))
 	}
@@ -70,12 +72,14 @@ func TestClient_TranslateGPUType(t *testing.T) {
 		expected string
 		wantErr  bool
 	}{
-		{"H100", "H100", false},
-		{"h100", "H100", false},
-		{"A100", "A100", false},
-		{"a100", "A100", false},
-		{"L40S", "L40S", false},
-		{"l40s", "L40S", false},
+		{"H100", "NVIDIA_H100", false},
+		{"h100", "NVIDIA_H100", false},
+		{"A100", "NVIDIA_A100", false},
+		{"a100", "NVIDIA_A100", false},
+		{"L40S", "NVIDIA_L40S", false},
+		{"l40s", "NVIDIA_L40S", false},
+		{"NVIDIA_A16", "NVIDIA_A16", false},
+		{"AMD_MI325X", "AMD_MI325X", false},
 		{"Unknown", "", true},
 	}
 
@@ -113,11 +117,11 @@ func TestClient_extractGPUFromPlan(t *testing.T) {
 		expectedGPU  string
 		expectedCount int
 	}{
-		{"GPU-H100-1", "H100", 1},
-		{"GPU-A100-2", "A100", 1},
-		{"GPU-L40S-4", "L40S", 1},
+		{"GPU-H100-1", "NVIDIA_H100", 1},
+		{"GPU-A100-2", "NVIDIA_A100", 1},
+		{"GPU-L40S-4", "NVIDIA_L40S", 1},
 		{"Standard-CPU-1", "", 0},
-		{"GPU-MI325X-1", "MI325X", 1},
+		{"GPU-MI325X-1", "AMD_MI325X", 1},
 	}
 
 	for _, tt := range tests {
@@ -180,5 +184,86 @@ func TestClient_calculateHourlyPrice(t *testing.T) {
 				t.Errorf("calculateHourlyPrice(%f) = %f, want %f", tt.monthlyCost, result, tt.expected)
 			}
 		})
+	}
+}
+
+// Integration tests - require VULTR_API_KEY environment variable
+func TestClient_ListAvailableGPUs_Integration(t *testing.T) {
+	apiKey := os.Getenv("VULTR_API_KEY")
+	if apiKey == "" {
+		t.Skip("VULTR_API_KEY not set, skipping integration test")
+	}
+
+	client, err := NewClient(apiKey)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	ctx := context.Background()
+	gpus, err := client.ListAvailableGPUs(ctx, nil)
+	if err != nil {
+		t.Fatalf("ListAvailableGPUs failed: %v", err)
+	}
+
+	t.Logf("Found %d GPU offers", len(gpus))
+	for i, gpu := range gpus {
+		if i >= 5 { // Show only first 5
+			break
+		}
+		t.Logf("  %d. %s - %s - $%.2f/hr (ID: %s)", i+1, gpu.GPUType, gpu.Region, gpu.HourlyPrice, gpu.ID)
+	}
+}
+
+func TestClient_GetProviderInfo_Integration(t *testing.T) {
+	apiKey := os.Getenv("VULTR_API_KEY")
+	if apiKey == "" {
+		t.Skip("VULTR_API_KEY not set, skipping integration test")
+	}
+
+	client, err := NewClient(apiKey)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	info := client.GetProviderInfo()
+	t.Logf("Provider: %s", info.Name)
+	t.Logf("Supported GPUs: %v", info.SupportedGPUTypes)
+	t.Logf("API Version: %s", info.APIVersion)
+}
+
+func TestClient_VRAMFiltering_Integration(t *testing.T) {
+	apiKey := os.Getenv("VULTR_API_KEY")
+	if apiKey == "" {
+		t.Skip("VULTR_API_KEY not set, skipping integration test")
+	}
+
+	client, err := NewClient(apiKey)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	ctx := context.Background()
+	
+	// Test filtering by minimum VRAM (4GB+)
+	filters := &providers.GPUFilters{
+		MinMemory: 4, // 4GB VRAM minimum
+	}
+	
+	gpus, err := client.ListAvailableGPUs(ctx, filters)
+	if err != nil {
+		t.Fatalf("ListAvailableGPUs with VRAM filter failed: %v", err)
+	}
+
+	t.Logf("Found %d GPU offers with 4GB+ VRAM", len(gpus))
+	for i, gpu := range gpus {
+		if i >= 3 { // Show only first 3
+			break
+		}
+		t.Logf("  %d. %s - %dGB VRAM - $%.2f/hr (ID: %s)", i+1, gpu.GPUType, gpu.Memory, gpu.HourlyPrice, gpu.ID)
+		
+		// Verify all results have at least 4GB VRAM
+		if gpu.Memory < 4 {
+			t.Errorf("GPU offer %s has %dGB VRAM, expected >= 4GB", gpu.ID, gpu.Memory)
+		}
 	}
 }

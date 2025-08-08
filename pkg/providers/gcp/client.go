@@ -95,9 +95,9 @@ func (c *Client) GetProviderInfo() *providers.ProviderInfo {
 			"asia-east1", "asia-northeast1", "asia-southeast1", "australia-southeast1",
 		},
 		SupportedGPUTypes: []string{
-			"nvidia-tesla-k80", "nvidia-tesla-p4", "nvidia-tesla-p100",
-			"nvidia-tesla-v100", "nvidia-tesla-t4", "nvidia-tesla-a100",
-			"nvidia-a100-80gb", "nvidia-h100-80gb", "nvidia-l4",
+			"NVIDIA_K80", "NVIDIA_P4", "NVIDIA_P100",
+			"NVIDIA_V100", "NVIDIA_T4", "NVIDIA_A100",
+			"NVIDIA_A100_80GB", "NVIDIA_H100_80GB", "NVIDIA_L4",
 		},
 		SupportsSpotInstances: true,
 		BillingGranularity:    "per-minute",

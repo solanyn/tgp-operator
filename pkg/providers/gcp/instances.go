@@ -115,15 +115,24 @@ func (c *Client) buildGPUConfig(gpuType string, count int32) []*computepb.Accele
 // translateGPUTypeToGCP converts standard GPU types to GCP accelerator types
 func (c *Client) translateGPUTypeToGCP(standardType string) string {
 	translations := map[string]string{
-		"K80":       "nvidia-tesla-k80",
-		"P4":        "nvidia-tesla-p4", 
-		"P100":      "nvidia-tesla-p100",
-		"V100":      "nvidia-tesla-v100",
-		"T4":        "nvidia-tesla-t4",
-		"A100":      "nvidia-tesla-a100",
-		"A100-80GB": "nvidia-a100-80gb",
-		"H100":      "nvidia-h100-80gb",
-		"L4":        "nvidia-l4",
+		"K80":            "nvidia-tesla-k80",
+		"P4":             "nvidia-tesla-p4", 
+		"P100":           "nvidia-tesla-p100",
+		"V100":           "nvidia-tesla-v100",
+		"T4":             "nvidia-tesla-t4",
+		"A100":           "nvidia-tesla-a100",
+		"A100-80GB":      "nvidia-a100-80gb",
+		"H100":           "nvidia-h100-80gb",
+		"L4":             "nvidia-l4",
+		"NVIDIA_K80":     "nvidia-tesla-k80",
+		"NVIDIA_P4":      "nvidia-tesla-p4",
+		"NVIDIA_P100":    "nvidia-tesla-p100",
+		"NVIDIA_V100":    "nvidia-tesla-v100",
+		"NVIDIA_T4":      "nvidia-tesla-t4",
+		"NVIDIA_A100":    "nvidia-tesla-a100",
+		"NVIDIA_A100_80GB": "nvidia-a100-80gb",
+		"NVIDIA_H100_80GB": "nvidia-h100-80gb",
+		"NVIDIA_L4":      "nvidia-l4",
 		// Add more mappings as needed
 	}
 	
@@ -139,15 +148,24 @@ func (c *Client) translateGPUTypeToGCP(standardType string) string {
 func (c *Client) getRecommendedMachineTypeForGPU(gpuType string) string {
 	// Map GPU types to appropriate machine types
 	machineTypeMap := map[string]string{
-		"K80":       "n1-standard-4",
-		"P4":        "n1-standard-4", 
-		"P100":      "n1-standard-8",
-		"V100":      "n1-standard-8",
-		"T4":        "n1-standard-4",
-		"A100":      "a2-highgpu-1g",
-		"A100-80GB": "a2-ultragpu-1g",
-		"H100":      "a3-highgpu-8g",
-		"L4":        "g2-standard-4",
+		"K80":             "n1-standard-4",
+		"P4":              "n1-standard-4", 
+		"P100":            "n1-standard-8",
+		"V100":            "n1-standard-8",
+		"T4":              "n1-standard-4",
+		"A100":            "a2-highgpu-1g",
+		"A100-80GB":       "a2-ultragpu-1g",
+		"H100":            "a3-highgpu-8g",
+		"NVIDIA_K80":      "n1-standard-4",
+		"NVIDIA_P4":       "n1-standard-4", 
+		"NVIDIA_P100":     "n1-standard-8",
+		"NVIDIA_V100":     "n1-standard-8",
+		"NVIDIA_T4":       "n1-standard-4",
+		"NVIDIA_A100":     "a2-highgpu-1g",
+		"NVIDIA_A100_80GB": "a2-ultragpu-1g",
+		"NVIDIA_H100_80GB": "a3-highgpu-8g",
+		"L4":               "g2-standard-4",
+		"NVIDIA_L4":        "g2-standard-4",
 	}
 	
 	if machineType, exists := machineTypeMap[gpuType]; exists {
@@ -238,27 +256,29 @@ func (c *Client) extractGPUTypeFromInstance(instance *computepb.Instance) string
 // translateGCPTypeToStandard converts GCP accelerator types back to standard types
 func (c *Client) translateGCPTypeToStandard(gcpType string) string {
 	translations := map[string]string{
-		"nvidia-tesla-k80":  "K80",
-		"nvidia-tesla-p4":   "P4",
-		"nvidia-tesla-p100": "P100", 
-		"nvidia-tesla-v100": "V100",
-		"nvidia-tesla-t4":   "T4",
-		"nvidia-tesla-a100": "A100",
-		"nvidia-a100-80gb":  "A100-80GB",
-		"nvidia-h100-80gb":  "H100",
-		"nvidia-l4":         "L4",
+		"nvidia-tesla-k80":  "NVIDIA_K80",
+		"nvidia-tesla-p4":   "NVIDIA_P4",
+		"nvidia-tesla-p100": "NVIDIA_P100", 
+		"nvidia-tesla-v100": "NVIDIA_V100",
+		"nvidia-tesla-t4":   "NVIDIA_T4",
+		"nvidia-tesla-a100": "NVIDIA_A100",
+		"nvidia-a100-80gb":  "NVIDIA_A100_80GB",
+		"nvidia-h100-80gb":  "NVIDIA_H100_80GB",
+		"nvidia-l4":         "NVIDIA_L4",
 	}
 	
 	if standardType, exists := translations[gcpType]; exists {
 		return standardType
 	}
 	
-	// Fallback: remove nvidia- prefix and uppercase
+	// Fallback: remove nvidia- prefix and add NVIDIA_ prefix
 	if strings.HasPrefix(gcpType, "nvidia-") {
-		return strings.ToUpper(strings.TrimPrefix(gcpType, "nvidia-"))
+		cleaned := strings.TrimPrefix(gcpType, "nvidia-")
+		cleaned = strings.ToUpper(strings.ReplaceAll(cleaned, "-", "_"))
+		return "NVIDIA_" + cleaned
 	}
 	
-	return strings.ToUpper(gcpType)
+	return "NVIDIA_" + strings.ToUpper(strings.ReplaceAll(gcpType, "-", "_"))
 }
 
 // extractLaunchTime gets the instance creation time

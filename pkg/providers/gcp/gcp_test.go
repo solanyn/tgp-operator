@@ -89,6 +89,9 @@ func TestTranslateGPUTypeToGCP(t *testing.T) {
 		{"A100-80GB", "nvidia-a100-80gb"},
 		{"H100", "nvidia-h100-80gb"},
 		{"L4", "nvidia-l4"},
+		{"NVIDIA_K80", "nvidia-tesla-k80"},
+		{"NVIDIA_A100", "nvidia-tesla-a100"},
+		{"NVIDIA_A100_80GB", "nvidia-a100-80gb"},
 		{"UNKNOWN_GPU", "nvidia-unknown-gpu"}, // fallback case
 	}
 
@@ -107,15 +110,15 @@ func TestTranslateGCPTypeToStandard(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"nvidia-tesla-k80", "K80"},
-		{"nvidia-tesla-p100", "P100"},
-		{"nvidia-tesla-v100", "V100"},
-		{"nvidia-tesla-t4", "T4"},
-		{"nvidia-tesla-a100", "A100"},
-		{"nvidia-a100-80gb", "A100-80GB"},
-		{"nvidia-h100-80gb", "H100"},
-		{"nvidia-l4", "L4"},
-		{"unknown-gpu", "UNKNOWN-GPU"}, // fallback case
+		{"nvidia-tesla-k80", "NVIDIA_K80"},
+		{"nvidia-tesla-p100", "NVIDIA_P100"},
+		{"nvidia-tesla-v100", "NVIDIA_V100"},
+		{"nvidia-tesla-t4", "NVIDIA_T4"},
+		{"nvidia-tesla-a100", "NVIDIA_A100"},
+		{"nvidia-a100-80gb", "NVIDIA_A100_80GB"},
+		{"nvidia-h100-80gb", "NVIDIA_H100_80GB"},
+		{"nvidia-l4", "NVIDIA_L4"},
+		{"unknown-gpu", "NVIDIA_UNKNOWN_GPU"}, // fallback case
 	}
 
 	for _, test := range tests {
@@ -324,6 +327,9 @@ func TestGetGPUPricing(t *testing.T) {
 		"A100",
 		"H100",
 		"L4",
+		"NVIDIA_K80",
+		"NVIDIA_A100",
+		"NVIDIA_H100_80GB",
 		"UNKNOWN", // fallback
 	}
 
