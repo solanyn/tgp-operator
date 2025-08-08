@@ -216,11 +216,22 @@ func (r *GPUNodePoolReconciler) handlePodDrivenProvisioning(ctx context.Context,
 
 // podMatchesPool checks if a pod's requirements can be satisfied by this node pool
 func (r *GPUNodePoolReconciler) podMatchesPool(pod corev1.Pod, nodePool *tgpv1.GPUNodePool, log logr.Logger) bool {
-	// Check if pod has GPU requirements
+	// Check if pod has GPU requirements (vendor-specific or TGP resources)
 	hasGPURequirement := false
+	
 	for _, container := range pod.Spec.Containers {
 		if container.Resources.Requests != nil {
-			if _, hasGPU := container.Resources.Requests["nvidia.com/gpu"]; hasGPU {
+			// Check for vendor-specific GPU resources
+			if _, hasNvidiaGPU := container.Resources.Requests["nvidia.com/gpu"]; hasNvidiaGPU {
+				hasGPURequirement = true
+				break
+			}
+			if _, hasAmdGPU := container.Resources.Requests["amd.com/gpu"]; hasAmdGPU {
+				hasGPURequirement = true
+				break
+			}
+			// Check for TGP vendor-agnostic GPU resources
+			if _, hasTGPGPU := container.Resources.Requests[providers.ResourceTGPGPU]; hasTGPGPU {
 				hasGPURequirement = true
 				break
 			}
@@ -354,7 +365,13 @@ func (r *GPUNodePoolReconciler) extractGPURequirement(pod *corev1.Pod) (*GPURequ
 		GPUCount: 1, // Default to 1 GPU
 	}
 
-	// Extract GPU count from resource requests
+	// Check for TGP vendor-agnostic resources first
+	if tgpReqs, hasTGPResources := providers.ExtractTGPRequirements(pod); hasTGPResources {
+		// Use TGP resource-based GPU selection
+		return r.selectGPUFromTGPRequirements(tgpReqs, requirement)
+	}
+
+	// Fallback to legacy vendor-specific resource detection
 	for _, container := range pod.Spec.Containers {
 		if container.Resources.Requests != nil {
 			if gpuQuantity, exists := container.Resources.Requests["nvidia.com/gpu"]; exists {
@@ -363,10 +380,16 @@ func (r *GPUNodePoolReconciler) extractGPURequirement(pod *corev1.Pod) (*GPURequ
 					break
 				}
 			}
+			if gpuQuantity, exists := container.Resources.Requests["amd.com/gpu"]; exists {
+				if count := int(gpuQuantity.Value()); count > 0 {
+					requirement.GPUCount = count
+					break
+				}
+			}
 		}
 	}
 
-	// Extract GPU type from node selector or annotations
+	// Extract GPU type from node selector or annotations (legacy)
 	if pod.Spec.NodeSelector != nil {
 		if gpuType, exists := pod.Spec.NodeSelector["tgp.io/gpu-type"]; exists {
 			requirement.GPUType = gpuType
@@ -383,11 +406,47 @@ func (r *GPUNodePoolReconciler) extractGPURequirement(pod *corev1.Pod) (*GPURequ
 		}
 	}
 
-	// Default GPU type if not specified
+	// Default GPU type if not specified (this should rarely happen now)
 	if requirement.GPUType == "" {
-		requirement.GPUType = "RTX4090" // Default to popular GPU type
+		requirement.GPUType = "NVIDIA_A16" // Default to cheapest modern GPU
 	}
 
+	return requirement, nil
+}
+
+// selectGPUFromTGPRequirements selects optimal GPU based on TGP resource requirements
+func (r *GPUNodePoolReconciler) selectGPUFromTGPRequirements(tgpReqs *providers.TGPResourceRequirements, baseReq *GPURequirement) (*GPURequirement, error) {
+	// TODO: This is a simplified implementation - we should get actual available GPUs from providers
+	// For now, use static selection based on VRAM requirements
+	
+	requirement := &GPURequirement{
+		GPUCount: int(tgpReqs.GPUCount),
+	}
+	
+	// Select GPU type based on VRAM requirements and vendor preference
+	if tgpReqs.MinVRAM <= 2 {
+		// Small VRAM requirements
+		if tgpReqs.PreferredVendor == "amd" {
+			requirement.GPUType = "AMD_MI325X" // Placeholder - would need real AMD options
+		} else {
+			requirement.GPUType = "NVIDIA_A16" // 2GB VRAM
+		}
+	} else if tgpReqs.MinVRAM <= 8 {
+		// Medium VRAM requirements  
+		if tgpReqs.PreferredVendor == "amd" {
+			requirement.GPUType = "AMD_MI300X"
+		} else {
+			requirement.GPUType = "NVIDIA_A40" // 48GB VRAM (overkill but available)
+		}
+	} else {
+		// High VRAM requirements
+		if tgpReqs.PreferredVendor == "amd" {
+			requirement.GPUType = "AMD_MI300X"
+		} else {
+			requirement.GPUType = "NVIDIA_A100" // 80GB VRAM
+		}
+	}
+	
 	return requirement, nil
 }
 

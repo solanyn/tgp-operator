@@ -39,15 +39,16 @@ type LaunchRequest struct {
 	TalosConfig  *v1.TalosConfig
 }
 
-// GPUFilters defines criteria for filtering available GPU offers
 type GPUFilters struct {
-	GPUType      string
-	Region       string
-	MaxPrice     float64 // Per hour in USD
-	MinMemory    int64   // GB
-	MinStorage   int64   // GB
-	SpotOnly     bool
-	OnDemandOnly bool
+	GPUType         string
+	Region          string
+	MaxPrice        float64
+	MinMemory       int64
+	MinStorage      int64
+	SpotOnly        bool
+	OnDemandOnly    bool
+	PreferredVendor string
+	WorkloadType    string
 }
 
 // NormalizedPricing provides standardized pricing across providers
@@ -122,13 +123,22 @@ const (
 	InstanceStateUnknown     InstanceState = "unknown"
 )
 
-// Standard GPU types for translation
 const (
 	GPUTypeRTX4090 = "RTX4090"
 	GPUTypeRTX3090 = "RTX3090"
 	GPUTypeH100    = "H100"
 	GPUTypeA100    = "A100"
 	GPUTypeV100    = "V100"
+)
+
+const (
+	ResourceTGPGPU    = "tgp.io/gpu"
+	ResourceTGPMemory = "tgp.io/memory"
+)
+
+const (
+	AnnotationVendor   = "tgp.io/vendor"
+	AnnotationWorkload = "tgp.io/workload"
 )
 
 // Standard regions for translation
