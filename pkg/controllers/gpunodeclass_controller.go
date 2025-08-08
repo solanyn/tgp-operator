@@ -296,7 +296,7 @@ func (r *GPUNodeClassReconciler) updateGPUAvailability(ctx context.Context, node
 			continue
 		}
 
-		log.V(1).Info("Provider client created successfully", "provider", providerName, "providerInfo", fmt.Sprintf("%T", providerClient))
+		log.V(1).Info("Provider client created successfully", "provider", providerName)
 		log.Info("Provider credentials validated", "provider", providerName)
 
 		// Credentials are valid

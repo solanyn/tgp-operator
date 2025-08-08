@@ -100,9 +100,6 @@ func (c *OperatorConfig) GetProviderCredentials(ctx context.Context, client clie
 		return "", fmt.Errorf("unknown provider: %s", provider)
 	}
 
-	// Debug logging to see what configuration we have
-	fmt.Printf("DEBUG: GetProviderCredentials for %s: enabled=%v, secret=%s, key=%s\n", 
-		provider, providerConfig.Enabled, providerConfig.CredentialsRef.Name, providerConfig.CredentialsRef.Key)
 
 	if !providerConfig.Enabled {
 		return "", fmt.Errorf("provider %s is not enabled", provider)
