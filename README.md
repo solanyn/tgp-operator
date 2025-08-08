@@ -10,10 +10,8 @@ Provisions GPU instances on-demand and integrates them into Talos Kubernetes clu
 
 - Multi-cloud support: Google Cloud Platform, Vultr
 - Tailscale mesh networking
-- Automatic provider selection by pricing
+- Pricing optimised GPU instance selection
 - Instance lifecycle management
-- Prometheus metrics
-- Provider credential validation
 
 ## Installation
 
@@ -21,7 +19,7 @@ Provisions GPU instances on-demand and integrates them into Talos Kubernetes clu
 
 - Talos Kubernetes cluster
 - Tailscale account
-- Cloud provider API keys (GCP or Vultr)
+- Cloud provider credentials
 
 ### Setup Tailscale
 
@@ -77,6 +75,7 @@ kubectl create secret generic tgp-operator-secret \
 ```
 
 Required credentials:
+
 - Google Cloud service account JSON with IAM permissions
 - Vultr API key from account API section
 - Tailscale OAuth credentials from admin console
@@ -86,6 +85,7 @@ Required credentials:
 Prepare Talos Linux images in your GCP project.
 
 **Option 1: Manual Upload**
+
 ```bash
 # Download Talos GCP image
 wget https://github.com/siderolabs/talos/releases/download/v1.10.5/gcp-amd64.tar.gz
@@ -109,6 +109,7 @@ gsutil rm gs://YOUR-BUCKET-NAME/talos-v1.10.5.tar.gz
 
 **Option 2: Custom Image Reference**
 Specify image URL in `GPUNodeClass`:
+
 ```yaml
 spec:
   talosConfig:
@@ -116,8 +117,9 @@ spec:
 ```
 
 **Required GCP IAM roles:**
+
 - `Compute Instance Admin (v1)`
-- `Compute Image User` 
+- `Compute Image User`
 - `Service Account User`
 
 #### Vultr Setup
@@ -125,9 +127,9 @@ spec:
 - Get API key from Vultr Control Panel → Account → API
 - Talos Linux available via marketplace (OS ID: 2284)
 - GPU types: H100, L40S, A100, A40, A16, MI325X, MI300X
-- 32 global regions
 
 **Required permissions:**
+
 - Instance management
 - Plan access
 - Region access
@@ -268,9 +270,10 @@ kubectl logs -n tgp-system deployment/tgp-operator-controller-manager -f
 
 ## Concepts
 
-Two resource types:
+This operator exposes models CRDs inspired by [Karpenter](https://karpenter.sh):
 
 1. `GPUNodeClass` - Infrastructure configuration:
+
    - Provider credentials and settings
    - Talos OS and Tailscale configuration
    - Instance requirements and cost limits
