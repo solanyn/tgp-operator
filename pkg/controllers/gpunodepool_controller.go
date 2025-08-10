@@ -806,14 +806,7 @@ func (r *GPUNodePoolReconciler) getProviderMachineConfig(ctx context.Context, no
 
 // getImageForProvider returns the image URL for a specific provider using Image Factory
 func (r *GPUNodePoolReconciler) getImageForProvider(ctx context.Context, provider string) (string, error) {
-	// Check if static images are configured first (fallback)
-	if r.Config.Talos.Images != nil {
-		if image, exists := r.Config.Talos.Images[provider]; exists {
-			return image, nil
-		}
-	}
-	
-	// Use Image Factory for dynamic generation if extensions are configured
+	// Use Image Factory for dynamic generation
 	if len(r.Config.Talos.Extensions) > 0 && r.Config.Talos.Version != "" {
 		// Map provider names to Image Factory platforms
 		var platform imagefactory.Platform
@@ -831,7 +824,7 @@ func (r *GPUNodePoolReconciler) getImageForProvider(ctx context.Context, provide
 		return r.ImageFactory.GenerateImageForExtensions(ctx, r.Config.Talos.Extensions, r.Config.Talos.Version, platform)
 	}
 	
-	return "", fmt.Errorf("no image configuration found for provider %s", provider)
+	return "", fmt.Errorf("missing required Talos configuration: version=%q extensions=%v", r.Config.Talos.Version, r.Config.Talos.Extensions)
 }
 
 func (r *GPUNodePoolReconciler) buildTemplateVariables(ctx context.Context, nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass, providerName string) (map[string]interface{}, error) {

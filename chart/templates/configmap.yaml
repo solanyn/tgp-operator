@@ -26,19 +26,9 @@ data:
           {{- end }}
           key: {{ .Values.config.providers.gcp.credentialsRef.key | default "GOOGLE_APPLICATION_CREDENTIALS_JSON" }}
     talos:
-      image: {{ .Values.config.talos.image | default "ghcr.io/siderolabs/talos:v1.10.5" }}
-    tailscale:
-      tags:
-        {{- range .Values.config.tailscale.tags | default (list "tag:k8s" "tag:gpu") }}
+      version: {{ .Values.config.talos.version | quote }}
+      extensions:
+        {{- range .Values.config.talos.extensions }}
         - {{ . | quote }}
         {{- end }}
-      ephemeral: {{ .Values.config.tailscale.ephemeral | default true }}
-      acceptRoutes: {{ .Values.config.tailscale.acceptRoutes | default true }}
-      oauthCredentialsRef:
-        name: {{ .Values.config.tailscale.oauthCredentialsRef.name | default "tgp-operator-secret" }}
-        {{- if .Values.config.tailscale.oauthCredentialsRef.namespace }}
-        namespace: {{ .Values.config.tailscale.oauthCredentialsRef.namespace }}
-        {{- end }}
-        clientIdKey: {{ .Values.config.tailscale.oauthCredentialsRef.clientIdKey | default "client-id" }}
-        clientSecretKey: {{ .Values.config.tailscale.oauthCredentialsRef.clientSecretKey | default "client-secret" }}
 {{- end }}

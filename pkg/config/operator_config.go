@@ -56,9 +56,6 @@ type TalosDefaults struct {
 	
 	// Extensions contains system extensions to include in generated images
 	Extensions []string `yaml:"extensions" json:"extensions"`
-	
-	// Images contains platform-specific custom images (fallback if extensions not used)
-	Images map[string]string `yaml:"images,omitempty" json:"images,omitempty"`
 }
 
 
