@@ -561,7 +561,7 @@ func (r *GPUNodePoolReconciler) createLaunchRequest(ctx context.Context, nodePoo
 	return &providers.LaunchRequest{
 		GPUType:      requirement.GPUType,
 		Region:       requirement.Region,
-		Image:        "talos", // TODO: Make configurable
+		Image:        "talos", // Use Vultr's native Talos OS image
 		UserData:     userData,
 		Labels:       labels,
 		SpotInstance: false, // TODO: Support spot instances
