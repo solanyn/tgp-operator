@@ -22,6 +22,7 @@ import (
 
 	tgpv1 "github.com/solanyn/tgp-operator/pkg/api/v1"
 	"github.com/solanyn/tgp-operator/pkg/config"
+	"github.com/solanyn/tgp-operator/pkg/imagefactory"
 	"github.com/solanyn/tgp-operator/pkg/pricing"
 	"github.com/solanyn/tgp-operator/pkg/providers"
 	"github.com/solanyn/tgp-operator/pkg/providers/gcp"
@@ -39,6 +40,7 @@ type GPUNodePoolReconciler struct {
 	Scheme       *runtime.Scheme
 	Config       *config.OperatorConfig
 	PricingCache *pricing.Cache
+	ImageFactory *imagefactory.Client
 }
 
 // +kubebuilder:rbac:groups=tgp.io,resources=gpunodepools,verbs=get;list;watch;create;update;patch;delete
@@ -319,7 +321,7 @@ func (r *GPUNodePoolReconciler) provisionNodeForPod(ctx context.Context, nodePoo
 		"gpuType", gpuRequirement.GPUType)
 
 	// Create launch request
-	launchRequest, err := r.createLaunchRequest(ctx, nodePool, nodeClass, gpuRequirement)
+	launchRequest, err := r.createLaunchRequest(ctx, nodePool, nodeClass, gpuRequirement, selectedProvider.Name)
 	if err != nil {
 		return fmt.Errorf("failed to create launch request: %w", err)
 	}
@@ -530,9 +532,9 @@ func (r *GPUNodePoolReconciler) createProviderClient(providerName, credentials s
 }
 
 // createLaunchRequest creates a launch request for the selected provider
-func (r *GPUNodePoolReconciler) createLaunchRequest(ctx context.Context, nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass, requirement *GPURequirement) (*providers.LaunchRequest, error) {
+func (r *GPUNodePoolReconciler) createLaunchRequest(ctx context.Context, nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass, requirement *GPURequirement, providerName string) (*providers.LaunchRequest, error) {
 	// Build user data script for node setup
-	userData, err := r.buildUserDataScript(ctx, nodePool, nodeClass)
+	userData, err := r.buildUserDataScript(ctx, nodePool, nodeClass, providerName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build user data script: %w", err)
 	}
@@ -569,9 +571,9 @@ func (r *GPUNodePoolReconciler) createLaunchRequest(ctx context.Context, nodePoo
 }
 
 // buildUserDataScript creates provider-specific initialization data for new nodes
-func (r *GPUNodePoolReconciler) buildUserDataScript(ctx context.Context, nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass) (string, error) {
+func (r *GPUNodePoolReconciler) buildUserDataScript(ctx context.Context, nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass, providerName string) (string, error) {
 	// Generate Talos machine configuration
-	machineConfig, err := r.generateTalosMachineConfig(ctx, nodePool, nodeClass)
+	machineConfig, err := r.generateTalosMachineConfig(ctx, nodePool, nodeClass, providerName)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate Talos machine config: %w", err)
 	}
@@ -580,7 +582,7 @@ func (r *GPUNodePoolReconciler) buildUserDataScript(ctx context.Context, nodePoo
 }
 
 // generateTalosMachineConfig creates a Talos machine configuration for the node
-func (r *GPUNodePoolReconciler) generateTalosMachineConfig(ctx context.Context, nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass) (string, error) {
+func (r *GPUNodePoolReconciler) generateTalosMachineConfig(ctx context.Context, nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass, providerName string) (string, error) {
 	// Get the machine config template
 	template, err := r.getMachineConfigTemplate(ctx, nodeClass)
 	if err != nil {
@@ -588,7 +590,7 @@ func (r *GPUNodePoolReconciler) generateTalosMachineConfig(ctx context.Context, 
 	}
 
 	// Create template variables for substitution
-	templateVars, err := r.buildTemplateVariables(ctx, nodePool, nodeClass)
+	templateVars, err := r.buildTemplateVariables(ctx, nodePool, nodeClass, providerName)
 	if err != nil {
 		return "", fmt.Errorf("failed to build template variables: %w", err)
 	}
@@ -784,11 +786,63 @@ cluster:
 }
 
 // buildTemplateVariables creates a map of variables for template substitution
-func (r *GPUNodePoolReconciler) buildTemplateVariables(ctx context.Context, nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass) (map[string]interface{}, error) {
+// getProviderMachineConfig gets the machine config for a specific provider
+// Checks provider-specific config first, falls back to nodeclass default
+func (r *GPUNodePoolReconciler) getProviderMachineConfig(ctx context.Context, nodeClass *tgpv1.GPUNodeClass, providerName string) (string, error) {
+	// First, check if the provider has a specific machine config
+	for _, provider := range nodeClass.Spec.Providers {
+		if provider.Name == providerName && provider.TalosConfig != nil && provider.TalosConfig.MachineConfigSecretRef != nil {
+			return r.getMachineConfigTemplateFromSecret(ctx, provider.TalosConfig.MachineConfigSecretRef, nodeClass.Namespace)
+		}
+	}
+	
+	// Fall back to nodeclass default config
+	if nodeClass.Spec.TalosConfig != nil && nodeClass.Spec.TalosConfig.MachineConfigSecretRef != nil {
+		return r.getMachineConfigTemplateFromSecret(ctx, nodeClass.Spec.TalosConfig.MachineConfigSecretRef, nodeClass.Namespace)
+	}
+	
+	return "", fmt.Errorf("no machine config found for provider %s", providerName)
+}
+
+// getImageForProvider returns the image URL for a specific provider using Image Factory
+func (r *GPUNodePoolReconciler) getImageForProvider(ctx context.Context, provider string) (string, error) {
+	// Check if static images are configured first (fallback)
+	if r.Config.Talos.Images != nil {
+		if image, exists := r.Config.Talos.Images[provider]; exists {
+			return image, nil
+		}
+	}
+	
+	// Use Image Factory for dynamic generation if extensions are configured
+	if len(r.Config.Talos.Extensions) > 0 && r.Config.Talos.Version != "" {
+		// Map provider names to Image Factory platforms
+		var platform imagefactory.Platform
+		switch provider {
+		case "vultr":
+			platform = imagefactory.PlatformVultr
+		case "gcp":
+			platform = imagefactory.PlatformGCP
+		case "digitalocean":
+			platform = imagefactory.PlatformDigitalOcean
+		default:
+			return "", fmt.Errorf("unsupported provider for Image Factory: %s", provider)
+		}
+		
+		return r.ImageFactory.GenerateImageForExtensions(ctx, r.Config.Talos.Extensions, r.Config.Talos.Version, platform)
+	}
+	
+	return "", fmt.Errorf("no image configuration found for provider %s", provider)
+}
+
+func (r *GPUNodePoolReconciler) buildTemplateVariables(ctx context.Context, nodePool *tgpv1.GPUNodePool, nodeClass *tgpv1.GPUNodeClass, providerName string) (map[string]interface{}, error) {
 	// Template variables will be populated from external sources (cluster credentials from user config)
 	// For now, we use placeholder values that users must replace in their machine config templates
 
-	talosDefaults := r.Config.Talos
+	// Generate provider-specific Talos image
+	talosImage, err := r.getImageForProvider(ctx, providerName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get image for provider %s: %w", providerName, err)
+	}
 
 	// Build node labels
 	nodeLabels := make(map[string]string)
@@ -812,7 +866,7 @@ func (r *GPUNodePoolReconciler) buildTemplateVariables(ctx context.Context, node
 		"ClusterSecret":        "{{.ClusterSecret}}",
 		"ControlPlaneEndpoint": "{{.ControlPlaneEndpoint}}",
 		"ClusterName":          "{{.ClusterName}}",
-		"TalosImage":           talosDefaults.Image,
+		"TalosImage":           talosImage,
 		"KubeletImage":         getKubeletImage(nodeClass),
 
 		// Node configuration

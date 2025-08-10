@@ -134,6 +134,40 @@ spec:
                       items:
                         type: string
                       type: array
+                    talosConfig:
+                      description: TalosConfig contains provider-specific Talos OS
+                        configuration
+                      properties:
+                        image:
+                          description: Image specifies the Talos image to use
+                          type: string
+                        kubeletImage:
+                          description: KubeletImage specifies the kubelet image to
+                            use (defaults to GPU-optimized image)
+                          type: string
+                        machineConfigSecretRef:
+                          description: |-
+                            MachineConfigSecretRef references a secret containing the machine config template
+                            The secret must contain a key with the template data
+                          properties:
+                            key:
+                              description: Key is the key within the secret
+                              type: string
+                            name:
+                              description: Name is the name of the secret
+                              type: string
+                            namespace:
+                              description: Namespace is the namespace of the secret
+                                (optional, defaults to current namespace)
+                              type: string
+                          required:
+                          - key
+                          - name
+                          type: object
+                      required:
+                      - image
+                      - machineConfigSecretRef
+                      type: object
                   required:
                   - credentialsRef
                   - name

@@ -578,6 +578,11 @@ func (in *ProviderConfig) DeepCopyInto(out *ProviderConfig) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.TalosConfig != nil {
+		in, out := &in.TalosConfig, &out.TalosConfig
+		*out = new(TalosConfig)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.Regions != nil {
 		in, out := &in.Regions, &out.Regions
 		*out = make([]string, len(*in))

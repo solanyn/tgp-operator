@@ -51,8 +51,14 @@ type SecretReference struct {
 
 // TalosDefaults contains default Talos configuration
 type TalosDefaults struct {
-	// Image is the default Talos image to use
-	Image string `yaml:"image" json:"image"`
+	// Version is the Talos version to use
+	Version string `yaml:"version" json:"version"`
+	
+	// Extensions contains system extensions to include in generated images
+	Extensions []string `yaml:"extensions" json:"extensions"`
+	
+	// Images contains platform-specific custom images (fallback if extensions not used)
+	Images map[string]string `yaml:"images,omitempty" json:"images,omitempty"`
 }
 
 
@@ -185,7 +191,16 @@ func DefaultConfig() *OperatorConfig {
 			},
 		},
 		Talos: TalosDefaults{
-			Image: "ghcr.io/siderolabs/talos:v1.10.5",
+			Version: "v1.11.0-beta.1",
+			Extensions: []string{
+				"siderolabs/nvidia-container-toolkit-production",
+				"siderolabs/nvidia-fabricmanager-production",
+				"siderolabs/amdgpu",
+				"siderolabs/tailscale",
+				"siderolabs/amd-ucode",
+				"siderolabs/intel-ucode",
+				"siderolabs/i915-ucode",
+			},
 		},
 	}
 }

@@ -17,6 +17,7 @@ import (
 	tgpv1 "github.com/solanyn/tgp-operator/pkg/api/v1"
 	"github.com/solanyn/tgp-operator/pkg/config"
 	"github.com/solanyn/tgp-operator/pkg/controllers"
+	"github.com/solanyn/tgp-operator/pkg/imagefactory"
 	"github.com/solanyn/tgp-operator/pkg/pricing"
 )
 
@@ -102,6 +103,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize Image Factory client
+	imageFactory := imagefactory.NewClient("")
+	
 	// Setup GPUNodePool controller
 	if err = (&controllers.GPUNodePoolReconciler{
 		Client:       mgr.GetClient(),
@@ -109,6 +113,7 @@ func main() {
 		Log:          ctrl.Log.WithName("controllers").WithName("GPUNodePool"),
 		Config:       operatorConfig,
 		PricingCache: pricingCache,
+		ImageFactory: imageFactory,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GPUNodePool")
 		os.Exit(1)

@@ -296,6 +296,10 @@ type ProviderConfig struct {
 	// +optional
 	Enabled *bool `json:"enabled,omitempty"`
 
+	// TalosConfig contains provider-specific Talos OS configuration
+	// +optional
+	TalosConfig *TalosConfig `json:"talosConfig,omitempty"`
+
 	// Regions specifies the allowed regions for this provider
 	// +optional
 	Regions []string `json:"regions,omitempty"`
