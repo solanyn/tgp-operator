@@ -9,7 +9,6 @@ Provisions GPU instances on-demand and integrates them into Talos Kubernetes clu
 ## Features
 
 - Multi-cloud support: Google Cloud Platform, Vultr
-- Tailscale mesh networking
 - Pricing optimised GPU instance selection
 - Instance lifecycle management
 
@@ -18,33 +17,10 @@ Provisions GPU instances on-demand and integrates them into Talos Kubernetes clu
 ### Prerequisites
 
 - Talos Kubernetes cluster
-- Tailscale account
+- Mesh networking (e.g., tailscale) or expose control plane publicly or use Omni
 - Cloud provider credentials
 
-### Setup Tailscale
-
-Set up Tailscale Operator:
-
-```bash
-# Create OAuth client at https://login.tailscale.com/admin/settings/oauth
-# Grant device management permissions and tag:k8s-operator tag
-
-# Install Tailscale Operator
-helm repo add tailscale https://pkgs.tailscale.com/helmcharts
-helm install tailscale-operator tailscale/tailscale-operator \
-  --namespace=tailscale \
-  --create-namespace \
-  --set-string oauth.clientId="your-client-id" \
-  --set-string oauth.clientSecret="your-client-secret"
-
-# Expose Kubernetes API via Tailscale
-kubectl annotate service kubernetes tailscale.com/expose=true
-kubectl annotate service kubernetes tailscale.com/hostname=k8s-api
-```
-
 ### Install Operator
-
-Once Tailscale is configured:
 
 ```bash
 # Install the TGP operator
@@ -55,7 +31,7 @@ helm install tgp-operator oci://ghcr.io/solanyn/charts/tgp-operator \
 
 ### Configuration
 
-Two resource types:
+We provide two resource types:
 
 1. `GPUNodeClass` - Cluster-scoped infrastructure templates
 2. `GPUNodePool` - Namespaced provisioning requests
