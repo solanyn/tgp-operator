@@ -97,7 +97,7 @@ func (c *Client) CreateSchematic(ctx context.Context, extensions []string) (stri
 	}
 	defer resp.Body.Close()
 	
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
