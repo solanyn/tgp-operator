@@ -13,6 +13,7 @@ go.work.sum
 bin/
 dist/
 schemas/
+manager
 
 # Generated CRDs
 chart/templates/crd.yaml
