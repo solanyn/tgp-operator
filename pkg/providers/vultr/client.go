@@ -53,6 +53,10 @@ func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchReques
 		UserData: req.UserData,
 	}
 
+	// Debug logging
+	fmt.Printf("Creating Vultr instance with: Region=%s, Plan=%s, OsID=%d, Label=%s, UserDataLen=%d\n", 
+		instanceReq.Region, instanceReq.Plan, instanceReq.OsID, instanceReq.Label, len(instanceReq.UserData))
+
 	instance, _, err := c.client.Instance.Create(ctx, instanceReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Vultr instance: %w", err)
