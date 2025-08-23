@@ -14,10 +14,10 @@ import (
 func (c *Client) buildLabels(req *providers.LaunchRequest) map[string]string {
 	labels := map[string]string{
 		"tgp-operator": "true",
-		"gpu-type":     strings.ToLower(strings.ReplaceAll(req.GPUType, "_", "-")), 
+		"gpu-type":     strings.ToLower(strings.ReplaceAll(req.GPUType, "_", "-")),
 		"managed-by":   "tgp-operator",
 	}
-	
+
 	// Add custom labels from request
 	for k, v := range req.Labels {
 		// GCP labels must be lowercase
@@ -25,7 +25,7 @@ func (c *Client) buildLabels(req *providers.LaunchRequest) map[string]string {
 		value := strings.ToLower(strings.ReplaceAll(v, "_", "-"))
 		labels[key] = value
 	}
-	
+
 	return labels
 }
 
@@ -45,7 +45,7 @@ func (c *Client) buildMetadata(req *providers.LaunchRequest) *computepb.Metadata
 			Value: proto.String(req.GPUType),
 		},
 	}
-	
+
 	return &computepb.Metadata{
 		Items: items,
 	}
@@ -58,7 +58,7 @@ func (c *Client) buildDiskConfig() []*computepb.AttachedDisk {
 			Boot:       proto.Bool(true),
 			AutoDelete: proto.Bool(true),
 			InitializeParams: &computepb.AttachedDiskInitializeParams{
-				DiskSizeGb:  proto.Int64(50), // 50GB boot disk
+				DiskSizeGb:  proto.Int64(50),        // 50GB boot disk
 				DiskType:    proto.String("pd-ssd"), // SSD for better performance
 				SourceImage: proto.String(c.getTalosImageURL()),
 			},
@@ -100,10 +100,10 @@ func (c *Client) buildGPUConfig(gpuType string, count int32) []*computepb.Accele
 	if gpuType == "" {
 		return nil
 	}
-	
+
 	// Translate standard GPU type to GCP accelerator type
 	gcpGPUType := c.translateGPUTypeToGCP(gpuType)
-	
+
 	return []*computepb.AcceleratorConfig{
 		{
 			AcceleratorType:  proto.String(gcpGPUType),
@@ -115,31 +115,31 @@ func (c *Client) buildGPUConfig(gpuType string, count int32) []*computepb.Accele
 // translateGPUTypeToGCP converts standard GPU types to GCP accelerator types
 func (c *Client) translateGPUTypeToGCP(standardType string) string {
 	translations := map[string]string{
-		"K80":            "nvidia-tesla-k80",
-		"P4":             "nvidia-tesla-p4", 
-		"P100":           "nvidia-tesla-p100",
-		"V100":           "nvidia-tesla-v100",
-		"T4":             "nvidia-tesla-t4",
-		"A100":           "nvidia-tesla-a100",
-		"A100-80GB":      "nvidia-a100-80gb",
-		"H100":           "nvidia-h100-80gb",
-		"L4":             "nvidia-l4",
-		"NVIDIA_K80":     "nvidia-tesla-k80",
-		"NVIDIA_P4":      "nvidia-tesla-p4",
-		"NVIDIA_P100":    "nvidia-tesla-p100",
-		"NVIDIA_V100":    "nvidia-tesla-v100",
-		"NVIDIA_T4":      "nvidia-tesla-t4",
-		"NVIDIA_A100":    "nvidia-tesla-a100",
+		"K80":              "nvidia-tesla-k80",
+		"P4":               "nvidia-tesla-p4",
+		"P100":             "nvidia-tesla-p100",
+		"V100":             "nvidia-tesla-v100",
+		"T4":               "nvidia-tesla-t4",
+		"A100":             "nvidia-tesla-a100",
+		"A100-80GB":        "nvidia-a100-80gb",
+		"H100":             "nvidia-h100-80gb",
+		"L4":               "nvidia-l4",
+		"NVIDIA_K80":       "nvidia-tesla-k80",
+		"NVIDIA_P4":        "nvidia-tesla-p4",
+		"NVIDIA_P100":      "nvidia-tesla-p100",
+		"NVIDIA_V100":      "nvidia-tesla-v100",
+		"NVIDIA_T4":        "nvidia-tesla-t4",
+		"NVIDIA_A100":      "nvidia-tesla-a100",
 		"NVIDIA_A100_80GB": "nvidia-a100-80gb",
 		"NVIDIA_H100_80GB": "nvidia-h100-80gb",
-		"NVIDIA_L4":      "nvidia-l4",
+		"NVIDIA_L4":        "nvidia-l4",
 		// Add more mappings as needed
 	}
-	
+
 	if gcpType, exists := translations[standardType]; exists {
 		return gcpType
 	}
-	
+
 	// Fallback: convert to lowercase with nvidia- prefix
 	return "nvidia-" + strings.ToLower(strings.ReplaceAll(standardType, "_", "-"))
 }
@@ -148,30 +148,30 @@ func (c *Client) translateGPUTypeToGCP(standardType string) string {
 func (c *Client) getRecommendedMachineTypeForGPU(gpuType string) string {
 	// Map GPU types to appropriate machine types
 	machineTypeMap := map[string]string{
-		"K80":             "n1-standard-4",
-		"P4":              "n1-standard-4", 
-		"P100":            "n1-standard-8",
-		"V100":            "n1-standard-8",
-		"T4":              "n1-standard-4",
-		"A100":            "a2-highgpu-1g",
-		"A100-80GB":       "a2-ultragpu-1g",
-		"H100":            "a3-highgpu-8g",
-		"NVIDIA_K80":      "n1-standard-4",
-		"NVIDIA_P4":       "n1-standard-4", 
-		"NVIDIA_P100":     "n1-standard-8",
-		"NVIDIA_V100":     "n1-standard-8",
-		"NVIDIA_T4":       "n1-standard-4",
-		"NVIDIA_A100":     "a2-highgpu-1g",
+		"K80":              "n1-standard-4",
+		"P4":               "n1-standard-4",
+		"P100":             "n1-standard-8",
+		"V100":             "n1-standard-8",
+		"T4":               "n1-standard-4",
+		"A100":             "a2-highgpu-1g",
+		"A100-80GB":        "a2-ultragpu-1g",
+		"H100":             "a3-highgpu-8g",
+		"NVIDIA_K80":       "n1-standard-4",
+		"NVIDIA_P4":        "n1-standard-4",
+		"NVIDIA_P100":      "n1-standard-8",
+		"NVIDIA_V100":      "n1-standard-8",
+		"NVIDIA_T4":        "n1-standard-4",
+		"NVIDIA_A100":      "a2-highgpu-1g",
 		"NVIDIA_A100_80GB": "a2-ultragpu-1g",
 		"NVIDIA_H100_80GB": "a3-highgpu-8g",
 		"L4":               "g2-standard-4",
 		"NVIDIA_L4":        "g2-standard-4",
 	}
-	
+
 	if machineType, exists := machineTypeMap[gpuType]; exists {
 		return machineType
 	}
-	
+
 	// Default fallback
 	return "n1-standard-4"
 }
@@ -190,7 +190,7 @@ func (c *Client) getTalosImageURL() string {
 // instanceToGPUInstance converts a GCP instance to our GPUInstance format
 func (c *Client) instanceToGPUInstance(instance *computepb.Instance, zone string) *providers.GPUInstance {
 	instanceID := fmt.Sprintf("%s/%s", zone, instance.GetName())
-	
+
 	return &providers.GPUInstance{
 		ID:        instanceID,
 		PublicIP:  c.extractPublicIP(instance),
@@ -258,7 +258,7 @@ func (c *Client) translateGCPTypeToStandard(gcpType string) string {
 	translations := map[string]string{
 		"nvidia-tesla-k80":  "NVIDIA_K80",
 		"nvidia-tesla-p4":   "NVIDIA_P4",
-		"nvidia-tesla-p100": "NVIDIA_P100", 
+		"nvidia-tesla-p100": "NVIDIA_P100",
 		"nvidia-tesla-v100": "NVIDIA_V100",
 		"nvidia-tesla-t4":   "NVIDIA_T4",
 		"nvidia-tesla-a100": "NVIDIA_A100",
@@ -266,18 +266,18 @@ func (c *Client) translateGCPTypeToStandard(gcpType string) string {
 		"nvidia-h100-80gb":  "NVIDIA_H100_80GB",
 		"nvidia-l4":         "NVIDIA_L4",
 	}
-	
+
 	if standardType, exists := translations[gcpType]; exists {
 		return standardType
 	}
-	
+
 	// Fallback: remove nvidia- prefix and add NVIDIA_ prefix
 	if strings.HasPrefix(gcpType, "nvidia-") {
 		cleaned := strings.TrimPrefix(gcpType, "nvidia-")
 		cleaned = strings.ToUpper(strings.ReplaceAll(cleaned, "-", "_"))
 		return "NVIDIA_" + cleaned
 	}
-	
+
 	return "NVIDIA_" + strings.ToUpper(strings.ReplaceAll(gcpType, "-", "_"))
 }
 
@@ -287,12 +287,12 @@ func (c *Client) extractLaunchTime(instance *computepb.Instance) time.Time {
 	if creationTimestamp == "" {
 		return time.Now()
 	}
-	
+
 	// Parse RFC3339 timestamp
 	if t, err := time.Parse(time.RFC3339, creationTimestamp); err == nil {
 		return t
 	}
-	
+
 	return time.Now()
 }
 

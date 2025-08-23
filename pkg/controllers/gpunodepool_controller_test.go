@@ -96,7 +96,7 @@ func TestBuildUserDataScript(t *testing.T) {
 			},
 			config: &config.OperatorConfig{
 				Talos: config.TalosDefaults{
-					Version: "v1.11.0-beta.1",
+					Version:    "v1.11.0-beta.1",
 					Extensions: []string{"siderolabs/nvidia-container-toolkit-production"},
 				},
 			},
@@ -145,7 +145,7 @@ func TestBuildUserDataScript(t *testing.T) {
 			if tt.nodeClass.Spec.TalosConfig != nil && tt.nodeClass.Spec.TalosConfig.MachineConfigSecretRef != nil {
 				secretRef := tt.nodeClass.Spec.TalosConfig.MachineConfigSecretRef
 				var templateContent string
-				
+
 				switch secretRef.Name {
 				case "custom-talos-config":
 					templateContent = `version: v1alpha1
@@ -156,7 +156,7 @@ machine:
 				case "invalid-talos-config":
 					templateContent = `invalid template {{.InvalidField`
 				}
-				
+
 				secret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      secretRef.Name,
@@ -170,9 +170,9 @@ machine:
 			}
 
 			reconciler := &GPUNodePoolReconciler{
-				Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build(),
-				Log:    logr.Discard(),
-				Config: tt.config,
+				Client:       fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build(),
+				Log:          logr.Discard(),
+				Config:       tt.config,
 				ImageFactory: imagefactory.NewClient(""),
 			}
 
