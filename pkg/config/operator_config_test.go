@@ -90,8 +90,11 @@ func TestDefaultConfig(t *testing.T) {
 	})
 
 	t.Run("should have default Talos configuration", func(t *testing.T) {
-		if config.Talos.Image == "" {
-			t.Error("Talos image should not be empty")
+		if config.Talos.Version == "" {
+			t.Error("Talos version should not be empty")
+		}
+		if len(config.Talos.Extensions) == 0 {
+			t.Error("Talos extensions should not be empty")
 		}
 	})
 

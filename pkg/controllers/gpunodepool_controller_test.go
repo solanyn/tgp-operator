@@ -13,6 +13,7 @@ import (
 
 	tgpv1 "github.com/solanyn/tgp-operator/pkg/api/v1"
 	"github.com/solanyn/tgp-operator/pkg/config"
+	"github.com/solanyn/tgp-operator/pkg/imagefactory"
 )
 
 func TestBuildUserDataScript(t *testing.T) {
@@ -50,7 +51,11 @@ func TestBuildUserDataScript(t *testing.T) {
 			},
 			config: &config.OperatorConfig{
 				Talos: config.TalosDefaults{
-					Image: "ghcr.io/siderolabs/talos:v1.10.5",
+					Version: "v1.11.0-beta.1",
+					Extensions: []string{
+						"siderolabs/nvidia-container-toolkit-production",
+						"siderolabs/tailscale",
+					},
 				},
 			},
 			validate: func(t *testing.T, result string) {
@@ -90,7 +95,10 @@ func TestBuildUserDataScript(t *testing.T) {
 				},
 			},
 			config: &config.OperatorConfig{
-				Talos: config.TalosDefaults{Image: "ghcr.io/siderolabs/talos:v1.10.5"},
+				Talos: config.TalosDefaults{
+					Version: "v1.11.0-beta.1",
+					Extensions: []string{"siderolabs/nvidia-container-toolkit-production"},
+				},
 			},
 			validate: func(t *testing.T, result string) {
 				if !contains(result, "{{.MachineToken}}") {
@@ -165,9 +173,10 @@ machine:
 				Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build(),
 				Log:    logr.Discard(),
 				Config: tt.config,
+				ImageFactory: imagefactory.NewClient(""),
 			}
 
-			result, err := reconciler.buildUserDataScript(context.Background(), tt.nodePool, tt.nodeClass)
+			result, err := reconciler.buildUserDataScript(context.Background(), tt.nodePool, tt.nodeClass, "vultr")
 
 			if tt.expectError && err == nil {
 				t.Error("expected error but got none")
