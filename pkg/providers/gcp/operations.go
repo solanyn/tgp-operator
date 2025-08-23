@@ -22,7 +22,7 @@ func (c *Client) waitForZoneOperation(ctx context.Context, opName, zone string) 
 	opts := []option.ClientOption{
 		option.WithCredentialsJSON([]byte(c.credentials)),
 	}
-	
+
 	zoneOpsClient, err := compute.NewZoneOperationsRESTClient(ctx, opts...)
 	if err != nil {
 		return fmt.Errorf("failed to create zone operations client: %w", err)
@@ -32,17 +32,17 @@ func (c *Client) waitForZoneOperation(ctx context.Context, opName, zone string) 
 	// Poll operation status
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
-	
+
 	timeout := time.After(10 * time.Minute) // 10 minute timeout
-	
+
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-			
+
 		case <-timeout:
 			return fmt.Errorf("operation timed out after 10 minutes")
-			
+
 		case <-ticker.C:
 			currentOp, err := zoneOpsClient.Get(ctx, &computepb.GetZoneOperationRequest{
 				Project:   c.projectID,
@@ -52,9 +52,9 @@ func (c *Client) waitForZoneOperation(ctx context.Context, opName, zone string) 
 			if err != nil {
 				return fmt.Errorf("failed to get operation status: %w", err)
 			}
-			
+
 			status := currentOp.GetStatus()
-			
+
 			switch status {
 			case computepb.Operation_DONE:
 				// Check for errors
@@ -66,11 +66,11 @@ func (c *Client) waitForZoneOperation(ctx context.Context, opName, zone string) 
 					return fmt.Errorf("operation failed: %s", strings.Join(errorMsgs, "; "))
 				}
 				return nil
-				
+
 			case computepb.Operation_RUNNING, computepb.Operation_PENDING:
 				// Continue polling
 				continue
-				
+
 			default:
 				return fmt.Errorf("unexpected operation status: %s", status.String())
 			}
@@ -87,7 +87,7 @@ func (c *Client) waitForGlobalOperation(ctx context.Context, op *computepb.Opera
 	opts := []option.ClientOption{
 		option.WithCredentialsJSON([]byte(c.credentials)),
 	}
-	
+
 	globalOpsClient, err := compute.NewGlobalOperationsRESTClient(ctx, opts...)
 	if err != nil {
 		return fmt.Errorf("failed to create global operations client: %w", err)
@@ -101,17 +101,17 @@ func (c *Client) waitForGlobalOperation(ctx context.Context, op *computepb.Opera
 
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
-	
+
 	timeout := time.After(20 * time.Minute) // Longer timeout for global operations
-	
+
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-			
+
 		case <-timeout:
 			return fmt.Errorf("global operation timed out after 20 minutes")
-			
+
 		case <-ticker.C:
 			currentOp, err := globalOpsClient.Get(ctx, &computepb.GetGlobalOperationRequest{
 				Project:   c.projectID,
@@ -120,9 +120,9 @@ func (c *Client) waitForGlobalOperation(ctx context.Context, op *computepb.Opera
 			if err != nil {
 				return fmt.Errorf("failed to get global operation status: %w", err)
 			}
-			
+
 			status := currentOp.GetStatus()
-			
+
 			switch status {
 			case computepb.Operation_DONE:
 				if currentOp.GetError() != nil {
@@ -133,10 +133,10 @@ func (c *Client) waitForGlobalOperation(ctx context.Context, op *computepb.Opera
 					return fmt.Errorf("global operation failed: %s", strings.Join(errorMsgs, "; "))
 				}
 				return nil
-				
+
 			case computepb.Operation_RUNNING, computepb.Operation_PENDING:
 				continue
-				
+
 			default:
 				return fmt.Errorf("unexpected global operation status: %s", status.String())
 			}
@@ -178,11 +178,11 @@ func (c *Client) validateInstanceConfig(req *providers.LaunchRequest) error {
 			break
 		}
 	}
-	
+
 	if !gpuSupported {
 		return fmt.Errorf("unsupported GPU type: %s", req.GPUType)
 	}
-	
+
 	// Validate region
 	supportedRegions := c.GetProviderInfo().SupportedRegions
 	regionSupported := false
@@ -192,16 +192,16 @@ func (c *Client) validateInstanceConfig(req *providers.LaunchRequest) error {
 			break
 		}
 	}
-	
+
 	if !regionSupported {
 		return fmt.Errorf("unsupported region: %s", req.Region)
 	}
-	
+
 	// Validate user data size (GCP metadata limit is 256KB)
 	if len(req.UserData) > 256*1024 {
 		return fmt.Errorf("user data too large: %d bytes (max 256KB)", len(req.UserData))
 	}
-	
+
 	return nil
 }
 
@@ -212,13 +212,13 @@ func (c *Client) getOperationProgress(ctx context.Context, op *computepb.Operati
 		opts := []option.ClientOption{
 			option.WithCredentialsJSON([]byte(c.credentials)),
 		}
-		
+
 		globalOpsClient, err := compute.NewGlobalOperationsRESTClient(ctx, opts...)
 		if err != nil {
 			return 0, "", fmt.Errorf("failed to create global operations client: %w", err)
 		}
 		defer globalOpsClient.Close()
-		
+
 		currentOp, err := globalOpsClient.Get(ctx, &computepb.GetGlobalOperationRequest{
 			Project:   c.projectID,
 			Operation: op.GetName(),
@@ -226,20 +226,20 @@ func (c *Client) getOperationProgress(ctx context.Context, op *computepb.Operati
 		if err != nil {
 			return 0, "", fmt.Errorf("failed to get global operation: %w", err)
 		}
-		
+
 		return currentOp.GetProgress(), currentOp.GetStatusMessage(), nil
 	} else {
 		// Zone operation
 		opts := []option.ClientOption{
 			option.WithCredentialsJSON([]byte(c.credentials)),
 		}
-		
+
 		zoneOpsClient, err := compute.NewZoneOperationsRESTClient(ctx, opts...)
 		if err != nil {
 			return 0, "", fmt.Errorf("failed to create zone operations client: %w", err)
 		}
 		defer zoneOpsClient.Close()
-		
+
 		currentOp, err := zoneOpsClient.Get(ctx, &computepb.GetZoneOperationRequest{
 			Project:   c.projectID,
 			Zone:      zone,
@@ -248,7 +248,7 @@ func (c *Client) getOperationProgress(ctx context.Context, op *computepb.Operati
 		if err != nil {
 			return 0, "", fmt.Errorf("failed to get zone operation: %w", err)
 		}
-		
+
 		return currentOp.GetProgress(), currentOp.GetStatusMessage(), nil
 	}
 }

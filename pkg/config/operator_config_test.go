@@ -69,7 +69,6 @@ func TestOperatorConfig_GetProviderCredentials(t *testing.T) {
 	})
 }
 
-
 func TestDefaultConfig(t *testing.T) {
 	config := DefaultConfig()
 
@@ -77,12 +76,12 @@ func TestDefaultConfig(t *testing.T) {
 		if config.Providers.GCP.Enabled {
 			t.Error("GCP should be disabled by default")
 		}
-		
+
 		expectedSecretName := "tgp-operator-secret"
 		if config.Providers.GCP.CredentialsRef.Name != expectedSecretName {
 			t.Errorf("Expected secret name '%s', got: %s", expectedSecretName, config.Providers.GCP.CredentialsRef.Name)
 		}
-		
+
 		expectedAPIKey := "GOOGLE_APPLICATION_CREDENTIALS_JSON"
 		if config.Providers.GCP.CredentialsRef.Key != expectedAPIKey {
 			t.Errorf("Expected API key '%s', got: %s", expectedAPIKey, config.Providers.GCP.CredentialsRef.Key)

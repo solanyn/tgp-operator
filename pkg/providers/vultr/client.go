@@ -54,7 +54,7 @@ func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchReques
 	}
 
 	// Debug logging
-	fmt.Printf("Creating Vultr instance with: Region=%s, Plan=%s, OsID=%d, Label=%s, UserDataLen=%d\n", 
+	fmt.Printf("Creating Vultr instance with: Region=%s, Plan=%s, OsID=%d, Label=%s, UserDataLen=%d\n",
 		instanceReq.Region, instanceReq.Plan, instanceReq.OsID, instanceReq.Label, len(instanceReq.UserData))
 
 	instance, _, err := c.client.Instance.Create(ctx, instanceReq)
@@ -127,15 +127,15 @@ func (c *Client) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFi
 		if filters != nil {
 			region = filters.Region
 		}
-		
+
 		// Extract VRAM from plan ID (e.g., vcg-a16-2c-8g-2vram -> 2GB VRAM)
 		vram := c.extractVRAMFromPlan(&plan)
-		
+
 		// Apply VRAM filtering if specified
 		if filters != nil && filters.MinMemory > 0 && vram < filters.MinMemory {
 			continue
 		}
-		
+
 		offer := providers.GPUOffer{
 			ID:          plan.ID,
 			GPUType:     gpuType,
@@ -275,12 +275,12 @@ func (c *Client) extractGPUFromPlan(plan *govultr.Plan) (string, int) {
 			return gpu, 1
 		}
 	}
-	
+
 	// Use GPUType field if available, keep full string
 	if plan.GPUType != "" {
 		return strings.ToUpper(plan.GPUType), 1
 	}
-	
+
 	// Fallback to plan type parsing
 	planType := strings.ToUpper(plan.Type)
 	if gpu := c.extractGPUFromID(planType); gpu != "" {
@@ -293,7 +293,7 @@ func (c *Client) extractGPUFromPlan(plan *govultr.Plan) (string, int) {
 // extractGPUFromID extracts GPU type from plan ID or type string
 func (c *Client) extractGPUFromID(idOrType string) string {
 	idOrType = strings.ToUpper(idOrType)
-	
+
 	if strings.Contains(idOrType, "H100") {
 		return "NVIDIA_H100"
 	}
@@ -315,7 +315,7 @@ func (c *Client) extractGPUFromID(idOrType string) string {
 	if strings.Contains(idOrType, "MI300X") {
 		return "AMD_MI300X"
 	}
-	
+
 	return ""
 }
 
@@ -324,7 +324,7 @@ func (c *Client) extractVRAMFromPlan(plan *govultr.Plan) int64 {
 	if plan.ID == "" {
 		return 0
 	}
-	
+
 	// Parse VRAM from plan ID like "vcg-a16-2c-8g-2vram"
 	parts := strings.Split(plan.ID, "-")
 	for _, part := range parts {
@@ -335,7 +335,7 @@ func (c *Client) extractVRAMFromPlan(plan *govultr.Plan) int64 {
 			}
 		}
 	}
-	
+
 	return 0
 }
 

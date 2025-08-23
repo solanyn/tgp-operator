@@ -26,7 +26,7 @@ func NewClient(baseURL string) *Client {
 	if baseURL == "" {
 		baseURL = DefaultFactoryURL
 	}
-	
+
 	return &Client{
 		baseURL: baseURL,
 		httpClient: &http.Client{
@@ -59,7 +59,7 @@ type Platform string
 
 const (
 	PlatformVultr        Platform = "vultr"
-	PlatformGCP          Platform = "gcp" 
+	PlatformGCP          Platform = "gcp"
 	PlatformDigitalOcean Platform = "digital-ocean"
 )
 
@@ -78,35 +78,35 @@ func IsPlatformSupported(platform Platform) bool {
 func (c *Client) CreateSchematic(ctx context.Context, extensions []string) (string, error) {
 	req := SchematicRequest{}
 	req.Customization.SystemExtensions.OfficialExtensions = extensions
-	
+
 	reqBody, err := json.Marshal(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal request: %w", err)
 	}
-	
+
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/schematics", bytes.NewReader(reqBody))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	httpReq.Header.Set("Content-Type", "application/json")
-	
+
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("failed to execute request: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
-	
+
 	var schematicResp SchematicResponse
 	if err := json.NewDecoder(resp.Body).Decode(&schematicResp); err != nil {
 		return "", fmt.Errorf("failed to decode response: %w", err)
 	}
-	
+
 	return schematicResp.ID, nil
 }
 
@@ -115,7 +115,7 @@ func (c *Client) GetImageURL(schematicID string, version string, platform Platfo
 	if !IsPlatformSupported(platform) {
 		return "", fmt.Errorf("unsupported platform: %s", platform)
 	}
-	
+
 	return fmt.Sprintf("%s/image/%s/%s/%s-amd64.raw.gz", c.baseURL, schematicID, version, platform), nil
 }
 
@@ -125,12 +125,12 @@ func (c *Client) GenerateImageForExtensions(ctx context.Context, extensions []st
 	if err != nil {
 		return "", fmt.Errorf("failed to create schematic: %w", err)
 	}
-	
+
 	imageURL, err := c.GetImageURL(schematicID, version, platform)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate image URL: %w", err)
 	}
-	
+
 	return imageURL, nil
 }
 

@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/vultr/govultr/v3"
 	"github.com/solanyn/tgp-operator/pkg/providers"
+	"github.com/vultr/govultr/v3"
 )
 
 func TestNewClient(t *testing.T) {
@@ -44,7 +44,7 @@ func TestNewClient(t *testing.T) {
 func TestClient_GetProviderInfo(t *testing.T) {
 	client, _ := NewClient("test-key")
 	info := client.GetProviderInfo()
-	
+
 	if info.Name != ProviderName {
 		t.Errorf("GetProviderInfo().Name = %v, want %v", info.Name, ProviderName)
 	}
@@ -58,7 +58,7 @@ func TestClient_GetProviderInfo(t *testing.T) {
 func TestClient_GetRateLimits(t *testing.T) {
 	client, _ := NewClient("test-key")
 	limits := client.GetRateLimits()
-	
+
 	if limits.RequestsPerSecond != 30 {
 		t.Errorf("GetRateLimits().RequestsPerSecond = %v, want 30", limits.RequestsPerSecond)
 	}
@@ -113,8 +113,8 @@ func TestClient_extractGPUFromPlan(t *testing.T) {
 	client, _ := NewClient("test-key")
 
 	tests := []struct {
-		planName     string
-		expectedGPU  string
+		planName      string
+		expectedGPU   string
 		expectedCount int
 	}{
 		{"GPU-H100-1", "NVIDIA_H100", 1},
@@ -243,12 +243,12 @@ func TestClient_VRAMFiltering_Integration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	
+
 	// Test filtering by minimum VRAM (4GB+)
 	filters := &providers.GPUFilters{
 		MinMemory: 4, // 4GB VRAM minimum
 	}
-	
+
 	gpus, err := client.ListAvailableGPUs(ctx, filters)
 	if err != nil {
 		t.Fatalf("ListAvailableGPUs with VRAM filter failed: %v", err)
@@ -260,7 +260,7 @@ func TestClient_VRAMFiltering_Integration(t *testing.T) {
 			break
 		}
 		t.Logf("  %d. %s - %dGB VRAM - $%.2f/hr (ID: %s)", i+1, gpu.GPUType, gpu.Memory, gpu.HourlyPrice, gpu.ID)
-		
+
 		// Verify all results have at least 4GB VRAM
 		if gpu.Memory < 4 {
 			t.Errorf("GPU offer %s has %dGB VRAM, expected >= 4GB", gpu.ID, gpu.Memory)
