@@ -2,6 +2,7 @@ package vultr
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"strconv"
 	"strings"
@@ -45,12 +46,15 @@ func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchReques
 		return nil, fmt.Errorf("failed to find suitable plan: %w", err)
 	}
 
+	// Base64 encode the user data as required by Vultr
+	encodedUserData := base64.StdEncoding.EncodeToString([]byte(req.UserData))
+
 	instanceReq := &govultr.InstanceCreateReq{
 		Region:   req.Region,
 		Plan:     plan.ID,
 		OsID:     2284, // Talos Linux OS ID
 		Label:    fmt.Sprintf("tgp-%s", req.GPUType),
-		UserData: req.UserData,
+		UserData: encodedUserData,
 	}
 
 	// Debug logging
