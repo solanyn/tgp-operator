@@ -3,13 +3,13 @@ module github.com/solanyn/tgp-operator
 go 1.24.4
 
 require (
-	cloud.google.com/go/compute v1.41.0
+	cloud.google.com/go/compute v1.44.0
 	github.com/go-logr/logr v1.4.3
 	github.com/prometheus/client_golang v1.23.0
 	github.com/vultr/govultr/v3 v3.21.1
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/time v0.12.0
-	google.golang.org/api v0.244.0
+	google.golang.org/api v0.246.0
 	google.golang.org/protobuf v1.36.8
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -79,7 +79,7 @@ require (
 	golang.org/x/tools v0.35.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto v0.0.0-20250603155806-513f23925822 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20250603155806-513f23925822 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20250804133106-a7a43d27e69b // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250728155136-f173205681a0 // indirect
 	google.golang.org/grpc v1.74.2 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
