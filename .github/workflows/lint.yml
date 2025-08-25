@@ -7,7 +7,7 @@ jobs:
     name: Go Linting & Formatting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: jdx/mise-action@v2
         with:
           cache: true
@@ -17,7 +17,7 @@ jobs:
     name: Helm Chart Linting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: jdx/mise-action@v2
         with:
           cache: true
@@ -27,7 +27,7 @@ jobs:
     name: GitHub Actions Linting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: jdx/mise-action@v2
         with:
           cache: true
