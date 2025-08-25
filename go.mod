@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go/compute v1.44.0
 	github.com/go-logr/logr v1.4.3
 	github.com/prometheus/client_golang v1.23.0
-	github.com/vultr/govultr/v3 v3.21.1
+	github.com/vultr/govultr/v3 v3.22.1
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/time v0.12.0
 	google.golang.org/api v0.246.0
