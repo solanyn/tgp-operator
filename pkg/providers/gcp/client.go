@@ -16,26 +16,26 @@ import (
 
 // Client implements the ProviderClient interface for Google Cloud Platform
 type Client struct {
-	projectID      string
-	credentials    string
-	computeClient  *compute.InstancesClient
-	machineClient  *compute.MachineTypesClient
-	imagesClient   *compute.ImagesClient
-	regionsClient  *compute.RegionsClient
+	projectID     string
+	credentials   string
+	computeClient *compute.InstancesClient
+	machineClient *compute.MachineTypesClient
+	imagesClient  *compute.ImagesClient
+	regionsClient *compute.RegionsClient
 }
 
 // ServiceAccountKey represents the structure of a GCP service account JSON key
 type ServiceAccountKey struct {
-	Type           string `json:"type"`
-	ProjectID      string `json:"project_id"`
-	PrivateKeyID   string `json:"private_key_id"`
-	PrivateKey     string `json:"private_key"`
-	ClientEmail    string `json:"client_email"`
-	ClientID       string `json:"client_id"`
-	AuthURI        string `json:"auth_uri"`
-	TokenURI       string `json:"token_uri"`
-	AuthProvider   string `json:"auth_provider_x509_cert_url"`
-	ClientCertURL  string `json:"client_x509_cert_url"`
+	Type          string `json:"type"`
+	ProjectID     string `json:"project_id"`
+	PrivateKeyID  string `json:"private_key_id"`
+	PrivateKey    string `json:"private_key"`
+	ClientEmail   string `json:"client_email"`
+	ClientID      string `json:"client_id"`
+	AuthURI       string `json:"auth_uri"`
+	TokenURI      string `json:"token_uri"`
+	AuthProvider  string `json:"auth_provider_x509_cert_url"`
+	ClientCertURL string `json:"client_x509_cert_url"`
 }
 
 // NewClient creates a new GCP provider client
@@ -107,7 +107,7 @@ func (c *Client) GetProviderInfo() *providers.ProviderInfo {
 // GetRateLimits returns the rate limits for the GCP API
 func (c *Client) GetRateLimits() *providers.RateLimitInfo {
 	return &providers.RateLimitInfo{
-		RequestsPerSecond: 20,  // Conservative estimate
+		RequestsPerSecond: 20,   // Conservative estimate
 		RequestsPerMinute: 1000, // GCP has generous limits
 		BurstCapacity:     50,
 	}
@@ -120,9 +120,9 @@ func (c *Client) ListAvailableGPUs(ctx context.Context, filters *providers.GPUFi
 	}
 
 	var offers []providers.GPUOffer
-	
+
 	regions := c.getRegionsToSearch(filters.Region)
-	
+
 	for _, region := range regions {
 		zones := c.getZonesForRegion(region)
 		for _, zone := range zones {
@@ -149,10 +149,10 @@ func (c *Client) GetNormalizedPricing(ctx context.Context, gpuType, region strin
 	// Get base instance pricing (e.g., n1-standard-4 with GPU)
 	machineType := c.getRecommendedMachineTypeForGPU(gpuType)
 	machinePrice := c.getMachinePricing(machineType, region)
-	
+
 	// Get GPU pricing
 	gpuPrice := c.getGPUPricing(gpuType, region)
-	
+
 	totalHourlyPrice := machinePrice + gpuPrice
 
 	return &providers.NormalizedPricing{
@@ -173,14 +173,14 @@ func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchReques
 	// Generate instance name
 	instanceName := c.generateInstanceName(req)
 	zone := c.selectBestZone(req.Region, req.GPUType)
-	
+
 	// Build instance configuration
 	instance := &computepb.Instance{
-		Name:         proto.String(instanceName),
-		MachineType:  proto.String(c.getMachineTypeURL(c.getRecommendedMachineTypeForGPU(req.GPUType), zone)),
-		Labels:       c.buildLabels(req),
-		Metadata:     c.buildMetadata(req),
-		Disks:        c.buildDiskConfig(),
+		Name:              proto.String(instanceName),
+		MachineType:       proto.String(c.getMachineTypeURL(c.getRecommendedMachineTypeForGPU(req.GPUType), zone)),
+		Labels:            c.buildLabels(req),
+		Metadata:          c.buildMetadata(req),
+		Disks:             c.buildDiskConfig(),
 		NetworkInterfaces: c.buildNetworkConfig(),
 		ServiceAccounts:   c.buildServiceAccountConfig(),
 		GuestAccelerators: c.buildGPUConfig(req.GPUType, 1),
@@ -191,8 +191,8 @@ func (c *Client) LaunchInstance(ctx context.Context, req *providers.LaunchReques
 
 	// Launch the instance
 	op, err := c.computeClient.Insert(ctx, &computepb.InsertInstanceRequest{
-		Project:      c.projectID,
-		Zone:         zone,
+		Project:          c.projectID,
+		Zone:             zone,
 		InstanceResource: instance,
 	})
 	if err != nil {
@@ -224,7 +224,7 @@ func (c *Client) TerminateInstance(ctx context.Context, instanceID string) error
 	}
 
 	zone, instanceName := c.parseInstanceID(instanceID)
-	
+
 	op, err := c.computeClient.Delete(ctx, &computepb.DeleteInstanceRequest{
 		Project:  c.projectID,
 		Zone:     zone,
@@ -244,7 +244,7 @@ func (c *Client) GetInstanceStatus(ctx context.Context, instanceID string) (*pro
 	}
 
 	zone, instanceName := c.parseInstanceID(instanceID)
-	
+
 	instance, err := c.computeClient.Get(ctx, &computepb.GetInstanceRequest{
 		Project:  c.projectID,
 		Zone:     zone,
@@ -277,50 +277,50 @@ func (c *Client) generateInstanceName(req *providers.LaunchRequest) string {
 	if pool, ok := req.Labels["nodepool"]; ok {
 		nodepool = pool
 	}
-	
+
 	// GCP instance names must be lowercase and start with letter
 	name := fmt.Sprintf("tgp-%s-%d", strings.ToLower(nodepool), timestamp)
-	
+
 	// Ensure name is valid (max 63 chars, only lowercase letters, numbers, hyphens)
 	if len(name) > 63 {
 		name = name[:63]
 	}
-	
+
 	return strings.Trim(name, "-")
 }
 
 // Close cleans up the client connections
 func (c *Client) Close() error {
 	var errs []error
-	
+
 	if c.computeClient != nil {
 		if err := c.computeClient.Close(); err != nil {
 			errs = append(errs, err)
 		}
 	}
-	
+
 	if c.machineClient != nil {
 		if err := c.machineClient.Close(); err != nil {
 			errs = append(errs, err)
 		}
 	}
-	
+
 	if c.imagesClient != nil {
 		if err := c.imagesClient.Close(); err != nil {
 			errs = append(errs, err)
 		}
 	}
-	
+
 	if c.regionsClient != nil {
 		if err := c.regionsClient.Close(); err != nil {
 			errs = append(errs, err)
 		}
 	}
-	
+
 	if len(errs) > 0 {
 		return fmt.Errorf("errors closing clients: %v", errs)
 	}
-	
+
 	return nil
 }
 
@@ -329,7 +329,7 @@ func (c *Client) TranslateGPUType(standard string) (string, error) {
 	return c.translateGPUTypeToGCP(standard), nil
 }
 
-// TranslateRegion translates standard regions to GCP regions  
+// TranslateRegion translates standard regions to GCP regions
 func (c *Client) TranslateRegion(standard string) (string, error) {
 	// GCP regions are used directly, no translation needed
 	return standard, nil

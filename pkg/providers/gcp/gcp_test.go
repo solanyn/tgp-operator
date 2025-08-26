@@ -193,7 +193,7 @@ func TestParseInstanceID(t *testing.T) {
 	for _, test := range tests {
 		zone, name := client.parseInstanceID(test.instanceID)
 		if zone != test.expectedZone || name != test.expectedName {
-			t.Errorf("parseInstanceID(%s): expected (%s, %s), got (%s, %s)", 
+			t.Errorf("parseInstanceID(%s): expected (%s, %s), got (%s, %s)",
 				test.instanceID, test.expectedZone, test.expectedName, zone, name)
 		}
 	}
@@ -229,7 +229,7 @@ func TestTranslateInstanceState(t *testing.T) {
 	client := NewClient("{}")
 
 	tests := []struct {
-		gcpState     string
+		gcpState      string
 		expectedState providers.InstanceState
 	}{
 		{"PROVISIONING", providers.InstanceStatePending},
@@ -278,7 +278,7 @@ func TestGetZonesForRegion(t *testing.T) {
 	client := NewClient("{}")
 
 	tests := []struct {
-		region string
+		region   string
 		minZones int
 	}{
 		{"us-central1", 3},
@@ -301,7 +301,7 @@ func TestGetMachinePricing(t *testing.T) {
 	// Test that pricing returns positive values
 	machineTypes := []string{
 		"n1-standard-4",
-		"n1-standard-8", 
+		"n1-standard-8",
 		"a2-highgpu-1g",
 		"g2-standard-4",
 		"unknown-machine-type", // fallback
@@ -352,7 +352,7 @@ func TestGenerateInstanceName(t *testing.T) {
 	}
 
 	name := client.generateInstanceName(req)
-	
+
 	if len(name) == 0 {
 		t.Error("Expected non-empty instance name")
 	}

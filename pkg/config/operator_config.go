@@ -17,7 +17,6 @@ type OperatorConfig struct {
 
 	// Talos contains default Talos configuration
 	Talos TalosDefaults `yaml:"talos" json:"talos"`
-
 }
 
 // ProvidersConfig contains configuration for all cloud providers
@@ -53,11 +52,10 @@ type SecretReference struct {
 type TalosDefaults struct {
 	// Version is the Talos version to use
 	Version string `yaml:"version" json:"version"`
-	
+
 	// Extensions contains system extensions to include in generated images
 	Extensions []string `yaml:"extensions" json:"extensions"`
 }
-
 
 // GetProviderCredentials retrieves API credentials for a provider
 func (c *OperatorConfig) GetProviderCredentials(ctx context.Context, client client.Client, provider string, operatorNamespace string) (string, error) {
@@ -71,7 +69,6 @@ func (c *OperatorConfig) GetProviderCredentials(ctx context.Context, client clie
 	default:
 		return "", fmt.Errorf("unknown provider: %s", provider)
 	}
-
 
 	if !providerConfig.Enabled {
 		return "", fmt.Errorf("provider %s is not enabled", provider)
@@ -99,7 +96,6 @@ func (c *OperatorConfig) GetProviderCredentials(ctx context.Context, client clie
 	return string(apiKey), nil
 }
 
-
 // LoadConfig loads operator configuration from a ConfigMap or returns default config
 func LoadConfig(ctx context.Context, client client.Client, configMapName, namespace string) (*OperatorConfig, error) {
 	// Try to load from ConfigMap first
@@ -108,7 +104,7 @@ func LoadConfig(ctx context.Context, client client.Client, configMapName, namesp
 		Name:      configMapName,
 		Namespace: namespace,
 	}, configMap)
-	
+
 	if err != nil {
 		// Return error instead of silently falling back to defaults
 		return nil, fmt.Errorf("failed to load ConfigMap %s/%s: %w", namespace, configMapName, err)
@@ -140,7 +136,7 @@ func validateConfig(config *OperatorConfig) error {
 
 	// Check that at least one provider is configured
 	hasEnabledProvider := false
-	
+
 	if config.Providers.Vultr.Enabled {
 		hasEnabledProvider = true
 		if config.Providers.Vultr.CredentialsRef.Name == "" {
@@ -150,7 +146,7 @@ func validateConfig(config *OperatorConfig) error {
 			return fmt.Errorf("vultr provider is enabled but credentialsRef.key is empty")
 		}
 	}
-	
+
 	if config.Providers.GCP.Enabled {
 		hasEnabledProvider = true
 		if config.Providers.GCP.CredentialsRef.Name == "" {
@@ -160,7 +156,7 @@ func validateConfig(config *OperatorConfig) error {
 			return fmt.Errorf("gcp provider is enabled but credentialsRef.key is empty")
 		}
 	}
-	
+
 	if !hasEnabledProvider {
 		return fmt.Errorf("no providers are enabled - at least one provider must be enabled")
 	}

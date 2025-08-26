@@ -44,7 +44,6 @@ type GPUNodeClassSpec struct {
 	// TalosConfig contains default Talos OS configuration
 	TalosConfig *TalosConfig `json:"talosConfig,omitempty"`
 
-
 	// InstanceRequirements defines the instance constraints
 	InstanceRequirements *InstanceRequirements `json:"instanceRequirements,omitempty"`
 

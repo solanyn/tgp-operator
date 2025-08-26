@@ -64,20 +64,20 @@ func main() {
 	}
 
 	pricingCache := pricing.NewCache(time.Minute * 15)
-	
+
 	// Load operator configuration using direct client (not cached)
 	operatorNamespace := os.Getenv("OPERATOR_NAMESPACE")
 	if operatorNamespace == "" {
 		operatorNamespace = "tgp-system" // Default namespace
 	}
-	
+
 	// Create direct client for ConfigMap loading
 	directClient, err := client.New(ctrl.GetConfigOrDie(), client.Options{Scheme: scheme})
 	if err != nil {
 		setupLog.Error(err, "failed to create direct client")
 		os.Exit(1)
 	}
-	
+
 	operatorConfig, err := config.LoadConfig(context.Background(), directClient, "tgp-operator-config", operatorNamespace)
 	if err != nil {
 		setupLog.Error(err, "failed to load operator configuration, using defaults")
@@ -105,7 +105,7 @@ func main() {
 
 	// Initialize Image Factory client
 	imageFactory := imagefactory.NewClient("")
-	
+
 	// Setup GPUNodePool controller
 	if err = (&controllers.GPUNodePoolReconciler{
 		Client:       mgr.GetClient(),

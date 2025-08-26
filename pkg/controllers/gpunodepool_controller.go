@@ -219,7 +219,7 @@ func (r *GPUNodePoolReconciler) handlePodDrivenProvisioning(ctx context.Context,
 func (r *GPUNodePoolReconciler) podMatchesPool(pod corev1.Pod, nodePool *tgpv1.GPUNodePool, log logr.Logger) bool {
 	// Check if pod has GPU requirements (vendor-specific or TGP resources)
 	hasGPURequirement := false
-	
+
 	for _, container := range pod.Spec.Containers {
 		if container.Resources.Requests != nil {
 			// Check for vendor-specific GPU resources
@@ -308,6 +308,11 @@ func (r *GPUNodePoolReconciler) provisionNodeForPod(ctx context.Context, nodePoo
 	gpuRequirement, err := r.extractGPURequirement(pod)
 	if err != nil {
 		return fmt.Errorf("failed to extract GPU requirement: %w", err)
+	}
+
+	// If no region specified in pod, select from node pool requirements
+	if gpuRequirement.Region == "" {
+		gpuRequirement.Region = r.selectRegionFromNodePool(nodePool)
 	}
 
 	// Select the best provider/region for this request
@@ -415,15 +420,27 @@ func (r *GPUNodePoolReconciler) extractGPURequirement(pod *corev1.Pod) (*GPURequ
 	return requirement, nil
 }
 
+// selectRegionFromNodePool selects a region from node pool requirements
+func (r *GPUNodePoolReconciler) selectRegionFromNodePool(nodePool *tgpv1.GPUNodePool) string {
+	// Look for region requirement in node pool template
+	for _, req := range nodePool.Spec.Template.Spec.Requirements {
+		if req.Key == "tgp.io/region" && len(req.Values) > 0 {
+			// Select the first available region (could be improved with pricing logic)
+			return req.Values[0]
+		}
+	}
+	return "" // No region requirement found
+}
+
 // selectGPUFromTGPRequirements selects optimal GPU based on TGP resource requirements
 func (r *GPUNodePoolReconciler) selectGPUFromTGPRequirements(tgpReqs *providers.TGPResourceRequirements, baseReq *GPURequirement) (*GPURequirement, error) {
 	// TODO: This is a simplified implementation - we should get actual available GPUs from providers
 	// For now, use static selection based on VRAM requirements
-	
+
 	requirement := &GPURequirement{
 		GPUCount: int(tgpReqs.GPUCount),
 	}
-	
+
 	// Select GPU type based on VRAM requirements and vendor preference
 	if tgpReqs.MinVRAM <= 2 {
 		// Small VRAM requirements
@@ -433,7 +450,7 @@ func (r *GPUNodePoolReconciler) selectGPUFromTGPRequirements(tgpReqs *providers.
 			requirement.GPUType = "NVIDIA_A16" // 2GB VRAM
 		}
 	} else if tgpReqs.MinVRAM <= 8 {
-		// Medium VRAM requirements  
+		// Medium VRAM requirements
 		if tgpReqs.PreferredVendor == "amd" {
 			requirement.GPUType = "AMD_MI300X"
 		} else {
@@ -447,7 +464,7 @@ func (r *GPUNodePoolReconciler) selectGPUFromTGPRequirements(tgpReqs *providers.
 			requirement.GPUType = "NVIDIA_A100" // 80GB VRAM
 		}
 	}
-	
+
 	return requirement, nil
 }
 
@@ -795,12 +812,12 @@ func (r *GPUNodePoolReconciler) getProviderMachineConfig(ctx context.Context, no
 			return r.getMachineConfigTemplateFromSecret(ctx, provider.TalosConfig.MachineConfigSecretRef, nodeClass.Namespace)
 		}
 	}
-	
+
 	// Fall back to nodeclass default config
 	if nodeClass.Spec.TalosConfig != nil && nodeClass.Spec.TalosConfig.MachineConfigSecretRef != nil {
 		return r.getMachineConfigTemplateFromSecret(ctx, nodeClass.Spec.TalosConfig.MachineConfigSecretRef, nodeClass.Namespace)
 	}
-	
+
 	return "", fmt.Errorf("no machine config found for provider %s", providerName)
 }
 
@@ -820,10 +837,10 @@ func (r *GPUNodePoolReconciler) getImageForProvider(ctx context.Context, provide
 		default:
 			return "", fmt.Errorf("unsupported provider for Image Factory: %s", provider)
 		}
-		
+
 		return r.ImageFactory.GenerateImageForExtensions(ctx, r.Config.Talos.Extensions, r.Config.Talos.Version, platform)
 	}
-	
+
 	return "", fmt.Errorf("missing required Talos configuration: version=%q extensions=%v", r.Config.Talos.Version, r.Config.Talos.Extensions)
 }
 
@@ -879,7 +896,6 @@ func getKubeletImage(nodeClass *tgpv1.GPUNodeClass) string {
 	// Default to standard kubelet - GPU Operator will handle GPU runtime
 	return "ghcr.io/siderolabs/kubelet:v1.31.1"
 }
-
 
 // applyTemplate applies Go template processing to the machine config template
 func (r *GPUNodePoolReconciler) applyTemplate(tmplStr string, vars map[string]interface{}) (string, error) {
@@ -1120,7 +1136,6 @@ func (r *GPUNodePoolReconciler) isStaticPod(pod *corev1.Pod) bool {
 	}
 	return false
 }
-
 
 // SetupWithManager sets up the controller with the Manager
 func (r *GPUNodePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
