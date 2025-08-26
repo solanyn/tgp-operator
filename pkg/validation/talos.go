@@ -6,7 +6,7 @@ import (
 	"strings"
 	"text/template"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // TalosConfigValidator validates Talos machine configuration templates
@@ -55,8 +55,21 @@ func (v *TalosConfigValidator) ValidateTemplate(machineConfigTemplate string) er
 
 // validateBasicTalosStructure validates basic Talos configuration structure
 func (v *TalosConfigValidator) validateBasicTalosStructure(config interface{}) error {
-	configMap, ok := config.(map[interface{}]interface{})
-	if !ok {
+	// yaml.v3 unmarshals to map[string]interface{}, yaml.v2 uses map[interface{}]interface{}
+	var configMap map[string]interface{}
+	
+	switch c := config.(type) {
+	case map[string]interface{}:
+		configMap = c
+	case map[interface{}]interface{}:
+		// Convert map[interface{}]interface{} to map[string]interface{} for compatibility
+		configMap = make(map[string]interface{})
+		for k, v := range c {
+			if keyStr, ok := k.(string); ok {
+				configMap[keyStr] = v
+			}
+		}
+	default:
 		return fmt.Errorf("config must be a YAML object")
 	}
 
@@ -79,7 +92,19 @@ func (v *TalosConfigValidator) validateBasicTalosStructure(config interface{}) e
 
 	// Validate machine section exists and has basic structure
 	if machine, exists := configMap["machine"]; exists {
-		if machineMap, ok := machine.(map[interface{}]interface{}); ok {
+		var machineMap map[string]interface{}
+		switch m := machine.(type) {
+		case map[string]interface{}:
+			machineMap = m
+		case map[interface{}]interface{}:
+			machineMap = make(map[string]interface{})
+			for k, v := range m {
+				if keyStr, ok := k.(string); ok {
+					machineMap[keyStr] = v
+				}
+			}
+		}
+		if machineMap != nil {
 			if _, exists := machineMap["token"]; !exists {
 				return fmt.Errorf("machine section missing required 'token' field")
 			}
@@ -88,7 +113,19 @@ func (v *TalosConfigValidator) validateBasicTalosStructure(config interface{}) e
 
 	// Validate cluster section exists and has basic structure
 	if cluster, exists := configMap["cluster"]; exists {
-		if clusterMap, ok := cluster.(map[interface{}]interface{}); ok {
+		var clusterMap map[string]interface{}
+		switch c := cluster.(type) {
+		case map[string]interface{}:
+			clusterMap = c
+		case map[interface{}]interface{}:
+			clusterMap = make(map[string]interface{})
+			for k, v := range c {
+				if keyStr, ok := k.(string); ok {
+					clusterMap[keyStr] = v
+				}
+			}
+		}
+		if clusterMap != nil {
 			requiredClusterFields := []string{"id", "secret", "controlPlane"}
 			for _, field := range requiredClusterFields {
 				if _, exists := clusterMap[field]; !exists {
