@@ -11,7 +11,7 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
+      - uses: jdx/mise-action@v3
         with:
           cache: true
       - name: Run security scans
@@ -24,7 +24,7 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
+      - uses: jdx/mise-action@v3
         with:
           cache: true
       - name: Run Trivy scans
