@@ -12,7 +12,7 @@ jobs:
         with:
           cache: true
       - name: Run Go linting
-        run: task lint:go
+        run: make lint
   helm-lint:
     name: Helm Chart Linting
     runs-on: ubuntu-latest
@@ -22,7 +22,7 @@ jobs:
         with:
           cache: true
       - name: Run Helm validation
-        run: task chart:validate
+        run: make chart-lint
   actionlint:
     name: GitHub Actions Linting
     runs-on: ubuntu-latest
@@ -32,4 +32,4 @@ jobs:
         with:
           cache: true
       - name: Run actionlint
-        run: task lint:actions
+        run: actionlint

@@ -108,7 +108,7 @@ jobs:
           sed -i "s/tag: .*/tag: ${{ steps.version.outputs.app_version }}/" chart/values.yaml
       - name: Generate CRDs for chart
         run: |
-          task chart:crd
+          make chart-crd
       - name: Lint chart
         run: |
           helm lint chart/

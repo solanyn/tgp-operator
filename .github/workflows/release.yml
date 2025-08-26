@@ -32,7 +32,7 @@ jobs:
         with:
           cache: true
       - name: Setup development environment
-        run: task setup
+        run: make deps
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
@@ -54,7 +54,7 @@ jobs:
           echo "📦 Creating release: $VERSION"
       - name: Run validation
         run: |
-          task release:validate
+          make check
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -69,4 +69,4 @@ jobs:
           if [ "${{ github.event.inputs.version-type }}" != "auto" ]; then
             git tag ${{ steps.version.outputs.version }}
           fi
-          task release:release
+          make ci-docker

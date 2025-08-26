@@ -16,7 +16,7 @@ jobs:
         with:
           cache: true
       - name: Run unit tests
-        run: task test:unit
+        run: make test-unit
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
@@ -32,7 +32,7 @@ jobs:
         with:
           cache: true
       - name: Run integration tests
-        run: task test:integration
+        run: make test-integration
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4

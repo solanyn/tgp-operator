@@ -2,12 +2,10 @@
 version: '3'
 tasks:
   install-codegen:
-    desc: Install code generation tools
+    desc: Ensure code generation tools are available via go.mod
     cmds:
-      - mise exec -- go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
-      - mise exec -- go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
-      - mise exec -- go install github.com/Khan/genqlient@latest
-    status: [test -f bin/oapi-codegen, test -f bin/genqlient]
+      - go mod download
+    status: [go list -f '{{.Dir}}' -m sigs.k8s.io/controller-tools > /dev/null 2>&1]
   generate-providers:
     desc: Generate provider API clients from OpenAPI/GraphQL specs
     deps: [install-codegen]
@@ -17,8 +15,8 @@ tasks:
     desc: Generate code (deepcopy methods, CRDs, and provider clients)
     deps: [install-codegen]
     cmds:
-      - bin/controller-gen object paths="./pkg/api/..."
-      - bin/controller-gen crd paths="./pkg/api/..." output:crd:artifacts:config=config/crd/bases
+      - go run sigs.k8s.io/controller-tools/cmd/controller-gen object paths="./pkg/api/..."
+      - go run sigs.k8s.io/controller-tools/cmd/controller-gen crd paths="./pkg/api/..." output:crd:artifacts:config=config/crd/bases
       - task: generate-providers
   build:
     desc: Build the manager binary
