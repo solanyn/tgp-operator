@@ -20,9 +20,15 @@ func (c *Client) buildLabels(req *providers.LaunchRequest) map[string]string {
 
 	// Add custom labels from request
 	for k, v := range req.Labels {
-		// GCP labels must be lowercase
-		key := strings.ToLower(strings.ReplaceAll(k, "_", "-"))
-		value := strings.ToLower(strings.ReplaceAll(v, "_", "-"))
+		// GCP labels must be lowercase and cannot contain dots or underscores
+		key := strings.ToLower(k)
+		key = strings.ReplaceAll(key, ".", "-")
+		key = strings.ReplaceAll(key, "_", "-")
+		
+		value := strings.ToLower(v)
+		value = strings.ReplaceAll(value, ".", "-")
+		value = strings.ReplaceAll(value, "_", "-")
+		
 		labels[key] = value
 	}
 
