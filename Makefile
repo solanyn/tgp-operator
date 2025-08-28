@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 
 # Variables
-GO_VERSION = 1.24
+GO_VERSION = 1.25
 DOCKER_REGISTRY = ghcr.io
 DOCKER_IMAGE = solanyn/tgp-operator
 KUBEBUILDER_ASSETS ?= $(shell setup-envtest use 1.28.0 -p path 2>/dev/null || echo "")

@@ -4,7 +4,7 @@ This guide covers local development setup and common workflows for the TGP Opera
 
 ## Prerequisites
 
-- Go 1.24+
+- Go 1.25+
 - Docker
 - kubectl
 - Helm 3.x
