@@ -9,7 +9,7 @@ require (
 	github.com/oapi-codegen/oapi-codegen/v2 v2.5.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/vultr/govultr/v3 v3.23.0
-	golang.org/x/oauth2 v0.30.0
+	golang.org/x/oauth2 v0.31.0
 	golang.org/x/time v0.12.0
 	google.golang.org/api v0.248.0
 	google.golang.org/protobuf v1.36.8
