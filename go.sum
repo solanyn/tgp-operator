@@ -270,6 +270,8 @@ github.com/vultr/govultr/v3 v3.22.1 h1:Be7unmYIFSKfBSZb+O7/zYqGH4jPUFueSGcmSkgpd
 github.com/vultr/govultr/v3 v3.22.1/go.mod h1:9WwnWGCKnwDlNjHjtt+j+nP+0QWq6hQXzaHgddqrLWY=
 github.com/vultr/govultr/v3 v3.23.0 h1:0jZo4FI+oMkPXFez1bvhsb5Ql0EZUFbe3SNLq3d8IIY=
 github.com/vultr/govultr/v3 v3.23.0/go.mod h1:9WwnWGCKnwDlNjHjtt+j+nP+0QWq6hQXzaHgddqrLWY=
+github.com/vultr/govultr/v3 v3.24.0 h1:fTTTj0VBve+Miy+wGhlb90M2NMDfpGFi6Frlj3HVy6M=
+github.com/vultr/govultr/v3 v3.24.0/go.mod h1:9WwnWGCKnwDlNjHjtt+j+nP+0QWq6hQXzaHgddqrLWY=
 github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
 github.com/x448/float16 v0.8.4/go.mod h1:14CWIYCyZA/cWjXOioeEpHeN/83MdbZDRQHoFcYsOfg=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
