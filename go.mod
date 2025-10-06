@@ -12,7 +12,7 @@ require (
 	golang.org/x/oauth2 v0.31.0
 	golang.org/x/time v0.13.0
 	google.golang.org/api v0.250.0
-	google.golang.org/protobuf v1.36.9
+	google.golang.org/protobuf v1.36.10
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.34.1
 	k8s.io/apimachinery v0.34.1
