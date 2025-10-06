@@ -3,7 +3,7 @@ module github.com/solanyn/tgp-operator
 go 1.25
 
 require (
-	cloud.google.com/go/compute v1.47.0
+	cloud.google.com/go/compute v1.48.0
 	github.com/Khan/genqlient v0.8.1
 	github.com/go-logr/logr v1.4.3
 	github.com/oapi-codegen/oapi-codegen/v2 v2.5.0
