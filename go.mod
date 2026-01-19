@@ -8,7 +8,7 @@ require (
 	github.com/go-logr/logr v1.4.3
 	github.com/oapi-codegen/oapi-codegen/v2 v2.5.1
 	github.com/prometheus/client_golang v1.23.2
-	github.com/vultr/govultr/v3 v3.24.0
+	github.com/vultr/govultr/v3 v3.26.1
 	golang.org/x/oauth2 v0.33.0
 	golang.org/x/time v0.14.0
 	google.golang.org/api v0.256.0
