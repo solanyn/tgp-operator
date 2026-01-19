@@ -1,6 +1,6 @@
 [tools]
 golang = "1.25.6"
-kubectl = "1.34.1"
+kubectl = "1.34.3"
 helm = "3.19.5"
 node = "22.21.1"
 "npm:@apiture/openapi-down-convert" = "latest"
