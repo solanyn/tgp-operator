@@ -550,6 +550,8 @@ sigs.k8s.io/controller-runtime v0.22.1 h1:Ah1T7I+0A7ize291nJZdS1CabF/lB4E++WizgV
 sigs.k8s.io/controller-runtime v0.22.1/go.mod h1:FwiwRjkRPbiN+zp2QRp7wlTCzbUXxZ/D4OzuQUDwBHY=
 sigs.k8s.io/controller-runtime v0.22.3 h1:I7mfqz/a/WdmDCEnXmSPm8/b/yRTy6JsKKENTijTq8Y=
 sigs.k8s.io/controller-runtime v0.22.3/go.mod h1:+QX1XUpTXN4mLoblf4tqr5CQcyHPAki2HLXqQMY6vh8=
+sigs.k8s.io/controller-runtime v0.22.4 h1:GEjV7KV3TY8e+tJ2LCTxUTanW4z/FmNB7l327UfMq9A=
+sigs.k8s.io/controller-runtime v0.22.4/go.mod h1:+QX1XUpTXN4mLoblf4tqr5CQcyHPAki2HLXqQMY6vh8=
 sigs.k8s.io/controller-tools v0.18.0 h1:rGxGZCZTV2wJreeRgqVoWab/mfcumTMmSwKzoM9xrsE=
 sigs.k8s.io/controller-tools v0.18.0/go.mod h1:gLKoiGBriyNh+x1rWtUQnakUYEujErjXs9pf+x/8n1U=
 sigs.k8s.io/controller-tools v0.19.0/go.mod h1:y5HY/iNDFkmFla2CfQoVb2AQXMsBk4ad84iR1PLANB0=
