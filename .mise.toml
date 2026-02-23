@@ -1,5 +1,5 @@
 [tools]
-golang = "1.25.6"
+golang = "1.25.7"
 kubectl = "1.35.0"
 helm = "3.20.0"
 node = "22.22.0"
