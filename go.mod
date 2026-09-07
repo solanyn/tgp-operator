@@ -5,7 +5,7 @@ go 1.25
 require (
 	cloud.google.com/go/compute v1.54.0
 	github.com/Khan/genqlient v0.8.1
-	github.com/go-logr/logr v1.4.3
+	github.com/go-logr/logr v1.4.4
 	github.com/oapi-codegen/oapi-codegen/v2 v2.5.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/vultr/govultr/v3 v3.27.0
