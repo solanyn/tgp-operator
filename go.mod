@@ -14,9 +14,9 @@ require (
 	google.golang.org/api v0.267.0
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.34.11
-	k8s.io/apimachinery v0.34.11
-	k8s.io/client-go v0.34.11
+	k8s.io/api v0.34.12
+	k8s.io/apimachinery v0.34.12
+	k8s.io/client-go v0.34.12
 	sigs.k8s.io/controller-runtime v0.22.5
 	sigs.k8s.io/controller-tools v0.19.0
 )
