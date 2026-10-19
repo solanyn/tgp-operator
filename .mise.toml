@@ -1,7 +1,7 @@
 [tools]
 golang = "1.27.2"
 kubectl = "1.37.1"
-helm = "3.22.0"
+helm = "3.22.1"
 node = "22.23.3"
 "npm:@apiture/openapi-down-convert" = "latest"
 op = "latest"
